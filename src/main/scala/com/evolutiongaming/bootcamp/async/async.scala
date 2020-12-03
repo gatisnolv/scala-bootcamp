@@ -5,6 +5,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success}
+import java.util.concurrent.atomic.AtomicReference
+import java.util.function.UnaryOperator
 
 object Threads extends App {
   new Thread(() => {
@@ -33,7 +35,6 @@ object BasicFutures extends App {
   val failedFuture: Future[Int] = Future.failed(new RuntimeException("oh my")) //doesn't schedule work
   failedFuture.failed.foreach(t => t.printStackTrace())
 
-
   val futureFromBlock: Future[String] = Future {
     //code block is immediately scheduled for execution on the implicit execution context
     //if you throw an exception inside the block, it is converted to a failed future case
@@ -53,7 +54,7 @@ object FutureFromPromise extends App {
     future.onComplete {
       case Success(value) =>
         promise.success(value + 1) //can be called only once
-      case Failure(t)     =>
+      case Failure(t) =>
         promise.failure(t) //can be called only once
     } //can be replaced with promise.complete(result: Try[T])
     //promise can be completed only once!
@@ -83,9 +84,17 @@ object FutureFromPromise extends App {
   - tryComplete
 
   Add implicit args to the function if needed!
-   */
+ */
 object Exercise1 extends App {
-  def firstCompleted[T](f1: Future[T], f2: Future[T])(implicit ec: ExecutionContext): Future[T] = ???
+  def firstCompleted[T](f1: Future[T], f2: Future[T])(implicit ec: ExecutionContext): Future[T] = {
+    val promise = Promise[T]()
+    // f1.onComplete(promise.tryComplete)
+    // f2.onComplete(promise.tryComplete)
+    //or
+    List(f1, f2).map(_.onComplete(promise.tryComplete))
+
+    promise.future
+  }
 
   {
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -104,23 +113,20 @@ object Exercise1 extends App {
 }
 
 object TransformFutures extends App {
-  def asyncInc(future: Future[Int])(implicit ec: ExecutionContext): Future[Int] =
-    future.map(_ + 1)
+  def asyncInc(future: Future[Int])(implicit ec: ExecutionContext): Future[Int] = future.map(_ + 1)
 
-  def asyncSum2(f1: Future[Int], f2: Future[Int])(implicit ec: ExecutionContext): Future[Int] =
-    f1.flatMap { value1 =>
-      //value => Future
-      f2.map { value2 =>
-        value1 + value2
-      }
-    } //completes with success when both futures succeed, fails when either of those fail
+  def asyncSum2(f1: Future[Int], f2: Future[Int])(implicit ec: ExecutionContext): Future[Int] = f1.flatMap { value1 =>
+    //value => Future
+    f2.map { value2 =>
+      value1 + value2
+    }
+  } //completes with success when both futures succeed, fails when either of those fail
 
   //nicer for-comprehension syntax
-  def asyncMultiply(f1: Future[Int], f2: Future[Int])(implicit ec: ExecutionContext): Future[Int] =
-    for {
-      value1 <- f1
-      value2 <- f2
-    } yield value1 * value2
+  def asyncMultiply(f1: Future[Int], f2: Future[Int])(implicit ec: ExecutionContext): Future[Int] = for {
+    value1 <- f1
+    value2 <- f2
+  } yield value1 * value2
 }
 
 /*
@@ -128,7 +134,14 @@ Implement sumAll using collection foldLeft and map + flatMap on Future's (or for
 If called on an empty collection, should return Future.successful(0).
  */
 object Exercise2 extends App {
-  def sumAll(futureValues: Seq[Future[Int]])(implicit ec: ExecutionContext): Future[Int] = ???
+  def sumAll(futureValues: Seq[Future[Int]])(implicit ec: ExecutionContext): Future[Int] = {
+    futureValues.foldLeft(Future.successful(0))((acc, el) =>
+      for {
+        accInt <- acc
+        elInt <- el
+      } yield accInt + elInt
+    )
+  }
 
   {
     import scala.concurrent.ExecutionContext.Implicits.global
@@ -142,13 +155,14 @@ object FutureShenanigans {
   import scala.concurrent.ExecutionContext.Implicits.global
   //parallel or in sequence?
 
+  //parallel
   def example1(f1: Future[Int], f2: Future[Int]): Future[Int] = {
     for {
       result1 <- f1
       result2 <- f2
     } yield result1 + result2
   }
-
+  // in sequence
   def example2(f1: => Future[Int], f2: => Future[Int]): Future[Int] = {
     for {
       result1 <- f1
@@ -250,22 +264,34 @@ object Exercise3 extends App {
   val taskIterations = 1000
   val initialBalance = 10
 
-
   //PLACE TO FIX - START
-  var balance1: Int = initialBalance
-  var balance2: Int = initialBalance
+
+//   @volatile
+//   var balance1: Int = initialBalance
+//   @volatile
+//   var balance2: Int = initialBalance
+// ​
+//   def doTaskIteration(): Unit = synchronized {
+//     val State(newBalance1, newBalance2) = transfer(State(balance1, balance2))
+//     balance1 = newBalance1
+//     balance2 = newBalance2
+//   }
+// ​
+//   def printBalancesSum(): Unit = synchronized {
+//     println(balance1 + balance2)
+//   }
+
+  val stateRef = new AtomicReference[State](State(initialBalance, initialBalance))
 
   def doTaskIteration(): Unit = {
-    val State(newBalance1, newBalance2) = transfer(State(balance1, balance2))
-    balance1 = newBalance1
-    balance2 = newBalance2
+    stateRef.updateAndGet(transfer)
   }
 
   def printBalancesSum(): Unit = {
-    println(balance1 + balance2)
+    val state = stateRef.get()
+    println(state.balance1 + state.balance2)
   }
   //PLACE TO FIX - FINISH
-
 
   def transfer(state: State): State = {
     if (state.balance1 >= state.balance2) {
@@ -275,9 +301,11 @@ object Exercise3 extends App {
     }
   }
 
-  val tasks = (1 to tasksCount).toVector.map(_ => Future {
-    (1 to taskIterations).foreach(_ => doTaskIteration())
-  })
+  val tasks = (1 to tasksCount).toVector.map(_ =>
+    Future {
+      (1 to taskIterations).foreach(_ => doTaskIteration())
+    }
+  )
   val tasksResultFuture: Future[Vector[Unit]] = Future.sequence(tasks)
   Await.ready(tasksResultFuture, 5.seconds)
 

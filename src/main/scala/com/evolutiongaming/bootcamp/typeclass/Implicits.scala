@@ -3,7 +3,7 @@ package com.evolutiongaming.bootcamp.typeclass
 import scala.language.implicitConversions
 import scala.util.Random
 
-object Implicits {
+object Implicits extends App {
   /*
   Brevity is the soul of wit.
 
@@ -31,7 +31,6 @@ object Implicits {
     //equivalent to repeatStrTwice(intToString(42))
     repeatStrTwice(42) //If God does not exist, everything is permitted
   }
-
   /*
   2. Extension methods using implicit conversion functions
 
@@ -115,12 +114,15 @@ object Implicits {
     val CommonEraStart: Instant = Instant.parse("0000-01-01T00:00:00.000Z")
 
     object Implicits {
-      //put your implicit class or implicit conversion function here
+      implicit class RichInstant(inner: Instant) {
+        def isBce = inner.isBefore(CommonEraStart)
+      }
     }
 
     object Workspace {
+      import Implicits._
       //use isBce extension method to implement this one
-      def isCe(instant: Instant): Boolean = ???
+      def isCe(instant: Instant): Boolean = !instant.isBce
     }
   }
 
@@ -142,14 +144,7 @@ object Implicits {
     def openTheBox(implicit key: MagicKey): String = s"Magic box opened with $key"
 
     //multiple parameter lists with multiple implicit parameters in the end
-    def putNumbersInTheBox(
-      number1: Int,
-    )(
-      number2: Int,
-    )(implicit
-      key: MagicKey,
-      potion: MagicPotion,
-    ): String = s"Number $number1 and $number2 have been put in the magic box using $key and $potion"
+    def putNumbersInTheBox(number1: Int)(number2: Int)(implicit key: MagicKey, potion: MagicPotion): String = s"Number $number1 and $number2 have been put in the magic box using $key and $potion"
 
     object Implicits {
       //implicit values can be a 'val'
@@ -168,7 +163,7 @@ object Implicits {
         //= putNumbersInTheBox(1)(2)(Implicits.magicKey, Implicits.TheMagicPotion),
 
         //implicit parameters can also be passed directly:
-        openTheBox(MagicKey("another-key")),
+        openTheBox(MagicKey("another-key"))
       )
     }
   }
@@ -191,8 +186,7 @@ object Implicits {
 
     : Show syntax is called "a context bound"
      */
-    def show[T: Show](value: T): String =
-      implicitly[Show[T]].apply(value)
+    def show[T: Show](value: T): String = implicitly[Show[T]].apply(value)
 
     object syntax {
       //our old friend implicit conversion but now with an implicit value requirement
@@ -213,8 +207,7 @@ object Implicits {
       //for Int's
       implicit val intShow: Show[Int] = (value: Int) => value.toString
       //even for any Seq[T] where T itself has a Show instance
-      implicit def seqShow[T: Show]: Show[Seq[T]] =
-        (value: Seq[T]) => value.map(show(_)).mkString("(", ", ", ")")
+      implicit def seqShow[T](implicit t: Show[T]): Show[Seq[T]] = (value: Seq[T]) => value.map(show(_)).mkString("(", ", ", ")")
     }
 
     object Workspace {
@@ -227,7 +220,7 @@ object Implicits {
       case class MyLuckyNumber(value: Int)
       object MyLuckyNumber {
         implicit val myLuckyNumberShow: Show[MyLuckyNumber] =
-          (luckyNumber: MyLuckyNumber) => s"lucky ${ luckyNumber.value }"
+          (luckyNumber: MyLuckyNumber) => s"lucky ${luckyNumber.value}"
       }
 
       def showEverything(): Unit = {
@@ -246,8 +239,11 @@ object Implicits {
   Let us create a reverseShow method which should be defined for any T which has a Show type-class instance
    */
   object Exercise2 {
+    import MoreImplicitParameters._
+    import instances._
+    import syntax._
     //change the method signature accordingly
-    def reverseShow(value: Any): String = ???
+    def reverseShow[T: Show](value: T): String = value.show.reverse
   }
 
   /*
@@ -258,11 +254,13 @@ object Implicits {
   Let's get to know them better!
    */
   object Exercise3 {
+
     /**
-     * Amount of years since the invention of the
-     * hyper-drive technology (we are certainly in negative values at the moment).
-     */
+      * Amount of years since the invention of the
+      * hyper-drive technology (we are certainly in negative values at the moment).
+      */
     case class HDEYears(value: Long)
+    implicit val HDEYearsOrdering: Ordering[HDEYears] = Ordering.by(_.value)
 
     /*
     should be defined on any T which has Ordering[T] and return second biggest value from the sequence
@@ -272,14 +270,31 @@ object Implicits {
 
     change the signature accordingly, add implicit instances if needed
      */
-    def secondBiggestValue[T](values: Seq[T]): Option[T] = ???
-
+    def secondBiggestValue[T: Ordering](values: Seq[T]): Option[T] =
+      if (values.size < 2) None
+      else Some(values.sorted.reverse(1))
 
     /**
-     * Custom number type!
-     * For now it just wraps a Float but more interesting stuff could come in the future, who knows...
-     */
+      * Custom number type!
+      * For now it just wraps a Float but more interesting stuff could come in the future, who knows...
+      */
     case class CustomNumber(value: Float)
+
+    implicit val CustomNumberFractional: Fractional[CustomNumber] = new Fractional[CustomNumber] {
+      override def fromInt(x: Int): CustomNumber = CustomNumber(x.toFloat)
+      override def div(x: CustomNumber, y: CustomNumber): CustomNumber = CustomNumber(x.value / y.value)
+      override def plus(x: CustomNumber, y: CustomNumber): CustomNumber = CustomNumber(x.value + y.value)
+
+      override def compare(x: CustomNumber, y: CustomNumber): Int = ???
+      override def minus(x: CustomNumber, y: CustomNumber): CustomNumber = ???
+      override def times(x: CustomNumber, y: CustomNumber): CustomNumber = ???
+      override def negate(x: CustomNumber): CustomNumber = ???
+      override def parseString(str: String): Option[CustomNumber] = ???
+      override def toInt(x: CustomNumber): Int = ???
+      override def toLong(x: CustomNumber): Long = ???
+      override def toFloat(x: CustomNumber): Float = ???
+      override def toDouble(x: CustomNumber): Double = ???
+    }
 
     /*
     should be defined on any T which has Fractional[T], should return average value if it can be obtained
@@ -288,7 +303,14 @@ object Implicits {
 
     change the signature accordingly, add implicit instances if needed
      */
-    def average[T](values: Seq[T]): Option[T] = ???
+    def average[T: Fractional](values: Seq[T]): Option[T] =
+      if (values.isEmpty) None
+      else {
+        val fractional = implicitly(Fractional[T])
+        val count: T = fractional.fromInt(values.size)
+        val sum: T = values.sum
+        Some(fractional.div(sum, count))
+      }
   }
 
   /*
@@ -310,22 +332,16 @@ object Implicits {
     }
 
     implicit val optionFoldable: Foldable[Option] = new Foldable[Option] {
-      override def foldLeft[T, S](ft: Option[T], s: S)(f: (S, T) => S): S =
-        ft match {
-          case None    => s
-          case Some(t) => f(s, t)
-        }
+      override def foldLeft[T, S](ft: Option[T], s: S)(f: (S, T) => S): S = ft match {
+        case None    => s
+        case Some(t) => f(s, t)
+      }
     }
     implicit val listFoldable: Foldable[List] = new Foldable[List] {
-      override def foldLeft[T, S](ft: List[T], s: S)(f: (S, T) => S): S =
-        ft.foldLeft(s)(f)
+      override def foldLeft[T, S](ft: List[T], s: S)(f: (S, T) => S): S = ft.foldLeft(s)(f)
     }
 
-    case class Triple[T](
-      v1: T,
-      v2: T,
-      v3: T,
-    )
+    case class Triple[T](v1: T, v2: T, v3: T)
 
     /*
     Part 1.
@@ -345,6 +361,11 @@ object Implicits {
     - Set[S] - zero should be Set.empty and plus should merge sets with + operation
      */
 
+    trait Summable[T] {
+      def plus(left: T, right: T): T
+      def zero: T
+    }
+
     /*
     Part 3.
 
@@ -353,5 +374,10 @@ object Implicits {
 
     def genericSum... - work out the right method signature, should take F[T] and return T
      */
+    def genericSum[F[_]: Foldable, T: Summable](f: F[T]): T = {
+      val foldable = implicitly[Foldable[F]]
+      val summable = implicitly[Summable[T]]
+      foldable.foldLeft(f, summable.zero)((acc, curr) => summable.plus(acc, curr))
+    }
   }
 }

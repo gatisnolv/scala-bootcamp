@@ -27,18 +27,38 @@ object Exercise3 extends App {
   - on Passivate, router should stop forwarding messages to entities, issue to all the PoisonPill message,
     wait until all terminated and only after that stop itself
    */
-  final class EntityRouterActor(
-    entityProps: Props,
-    extractEntityId: PartialFunction[Any, String],
-  ) extends Actor with ActorLogging {
+  final class EntityRouterActor(entityProps: Props, extractEntityId: PartialFunction[Any, String]) extends Actor with ActorLogging {
 
     private var entityRefs: Map[String, ActorRef] = Map.empty
 
     override def receive: Receive = working
 
-    private def working: Receive = ???
+    private def working: Receive = {
+      case cmd: Any if extractEntityId.isDefinedAt(cmd) =>
+        val entityId = extractEntityId(cmd)
+        entityRefs.get(entityId) match {
+          case Some(entityRef) => entityRef forward cmd
+          case None =>
+            val newEntityRef = context.watch(context.actorOf(entityProps, ActorNameSanitizer.sanitize(entityId)))
+            entityRefs = entityRefs.updated(entityId, newEntityRef)
+            newEntityRef forward cmd
+        }
+      case Terminated(entityRef) =>
+        val entityId = ActorNameSanitizer.desanitize(entityRef.path.name)
+        entityRefs = entityRefs - entityId
+      case Passivate =>
+        if (entityRefs.isEmpty) context.stop(self)
+        else {
+          entityRefs.values.foreach(_ ! PoisonPill)
+          context.become(passivating)
+        }
+    }
 
-    private def passivating: Receive = ???
+    private def passivating: Receive = { case Terminated(entityRef) =>
+      val entityId = ActorNameSanitizer.desanitize(entityRef.path.name)
+      entityRefs = entityRefs - entityId
+      if (entityRefs.isEmpty) context.stop(self)
+    }
 
     override def preStart(): Unit = {
       log.info("Router starting!")
@@ -48,7 +68,6 @@ object Exercise3 extends App {
       log.info("Router stopping!")
     }
   }
-
 
   object ActorNameSanitizer {
     def sanitize(name: String): String = URLEncoder.encode(name, StandardCharsets.UTF_8)
@@ -69,10 +88,9 @@ object Exercise3 extends App {
       log.info("Entity {} stopping!", id)
     }
 
-    override def receive: Receive = {
-      case cmd: PrintNum =>
-        log.info("Entity {} received command {}", id, cmd)
-        sender() ! Done(cmd)
+    override def receive: Receive = { case cmd: PrintNum =>
+      log.info("Entity {} received command {}", id, cmd)
+      sender() ! Done(cmd)
     }
   }
 
@@ -81,13 +99,15 @@ object Exercise3 extends App {
   implicit val timeout: Timeout = Timeout(2.seconds)
 
   val router: ActorRef = system.actorOf(
-    Props(new EntityRouterActor(
-      entityProps = Props(new MyEntity),
-      extractEntityId = {
-        case cmd: PrintNum => cmd.entityId
-      },
-    )),
-    "router",
+    Props(
+      new EntityRouterActor(
+        entityProps = Props(new MyEntity),
+        extractEntityId = { case cmd: PrintNum =>
+          cmd.entityId
+        }
+      )
+    ),
+    "router"
   )
 
   println(Await.result((router ? PrintNum("e(1)", 10)), timeout.duration))

@@ -6,12 +6,13 @@ import akka.util.Timeout
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.util.control.NoStackTrace
+import scala.util.Try
+import akka.event.LoggingReceive
 
 object Exercise2 extends App {
   object AskPattern {
     implicit class RichActorRef(val inner: ActorRef) extends AnyVal {
-      def ask(msg: Any)(implicit refFactory: ActorRefFactory, timeout: Timeout): Future[Any] =
-        AskPattern.ask(inner, msg)
+      def ask(msg: Any)(implicit refFactory: ActorRefFactory, timeout: Timeout): Future[Any] = AskPattern.ask(inner, msg)
 
       def ?(msg: Any)(implicit refFactory: ActorRefFactory, timeout: Timeout): Future[Any] = ask(msg)
     }
@@ -22,8 +23,7 @@ object Exercise2 extends App {
       promise.future
     }
 
-    final case class TimeoutException(msg: Any, timeout: Timeout)
-      extends RuntimeException(s"Ask timeout after $timeout on message $msg") with NoStackTrace
+    final case class TimeoutException(msg: Any, timeout: Timeout) extends RuntimeException(s"Ask timeout after $timeout on message $msg") with NoStackTrace
 
     /*
     Actor should implement ask pattern:
@@ -35,20 +35,26 @@ object Exercise2 extends App {
 
     Use context.setReceiveTimeout!
      */
-    private class AskActor(
-      targetRef: ActorRef,
-      msg: Any,
-      timeout: Timeout,
-      promise: Promise[Any],
-    ) extends Actor {
+    private class AskActor(targetRef: ActorRef, msg: Any, timeout: Timeout, promise: Promise[Any]) extends Actor {
 
-      override def receive: Receive = ???
+      targetRef ! msg
+
+      context.setReceiveTimeout(timeout.duration)
+
+      override def receive: Receive = LoggingReceive {
+        case ReceiveTimeout =>
+          promise.failure(TimeoutException(msg, timeout))
+          context.stop(self)
+        case msg: Any if sender() == targetRef =>
+          promise.success(msg)
+          context.stop(self)
+      }
     }
   }
 
   final class WorkerActor extends Actor {
     override def receive: Receive = {
-      case "ping"    =>
+      case "ping" =>
         sender() ! "pong"
       case "timeout" => //do nothing
     }

@@ -6,7 +6,7 @@ import cats.syntax.functor._
 
 object p0_Introduction {
 
-  /***
+  /** *
     * Our lecture is dedicated to a library that is widely used within Scala community - Cats.
     * The name `Cats` alludes to Category theory and the library contains abstractions making our life
     * easier.
@@ -57,17 +57,18 @@ object p0_Introduction {
     * Now we can change the effect without modifying the function implementation.
     */
 
-  def upgradeEffectAgnostic[F[_]: Monad](find: String => F[User], save: User => F[Boolean]): F[Boolean] =
-    find("Bob").map(upgrade).flatMap(save)
+  def upgradeEffectAgnostic[F[_]: Monad](find: String => F[User], save: User => F[Boolean]): F[Boolean] = find("Bob").map(upgrade).flatMap(save)
 
   val savedAgnOpt: Option[Boolean] = upgradeEffectAgnostic(findUserOpt, saveUserOpt)
   val savedAgnEither: Either[String, Boolean] = upgradeEffectAgnostic(findUserEither, saveUserEither)
 
-    /**
+  /**
     * P.S. Cats resources:
     * https://typelevel.org/cats/
     * https://www.scalawithcats.com/
     * https://www.scala-exercises.org/cats
     */
+
+  //Homework to do: write about an interesting topic from cats, that wasn't part of the lecture
 
 }

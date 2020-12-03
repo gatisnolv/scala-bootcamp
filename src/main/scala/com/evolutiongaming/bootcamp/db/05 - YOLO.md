@@ -105,6 +105,7 @@ sql"select id, name, birthday from authors"
 ```
 
 ## Sample for `Meta`
+
 ```scala
 sql"select id, name, birthday from authors"
     .query[Author]
@@ -126,14 +127,18 @@ sql"select id, name, birthday from authors"
 ```
 
 ## Sample for query validation using `.check`
+
 ```scala
+// final case class AuthorXXX(id: UUID, name: String, birthday: Option[LocalDate])
 sql"select id, name, birthday from authors"
-    .query[Author]
+    // .query[Author]
+    .query[AuthorXXX]
     .check
     .unsafeRunSync()
 ```
 
 ## Sample for logging of queries
+
 ```scala
 sql"select id, name, birthday from authors where id = $authorOdersky"
     .queryWithLogHandler[Author](LogHandler.jdkLogHandler)
@@ -142,4 +147,3 @@ sql"select id, name, birthday from authors where id = $authorOdersky"
     .map(println)
     .unsafeRunSync()
 ```
-

@@ -37,7 +37,7 @@ object PowerfulScala {
   //
   // sbt:scala-bootcamp> testOnly *testing2.PowerfulScalaSpec
   //
-  def energy(mass: String): String = {
+  def energy(mass: Long): String = {
     val speedOfLight = BigDecimal(299792458)
     val energy = BigDecimal(mass) * speedOfLight.pow(2)
     energy.toString
@@ -47,7 +47,7 @@ object PowerfulScala {
 class PowerfulScalaSpec extends AnyFunSuite {
 
   test("we get a correct result") {
-    assert(PowerfulScala.energy("100") == "8987551787368176400")
+    assert(PowerfulScala.energy(100) == "8987551787368176400")
   }
   test("wrong call does not compile") {
     assertTypeError("""PowerfulScala.energy("wrong stuff")""")
@@ -63,8 +63,7 @@ object RefinedScala {
   // Like these:
   case class PositiveNumber private (val value: Int) extends AnyVal
   object PositiveNumber {
-    def create(value: Int): Option[PositiveNumber] =
-      if (value > 0) Some(PositiveNumber(value)) else None
+    def create(value: Int): Option[PositiveNumber] = if (value > 0) Some(PositiveNumber(value)) else None
   }
 
   // The problem about smart constructors and value classes is that you create a
@@ -75,10 +74,7 @@ object RefinedScala {
   //
   // There is a library allowing to check the properties of the types during
   // compilation, i.e you have the same good old types, but with limitations:
-  case class DatabaseConfig(
-    host: String Refined IPv4,
-    timeoutMilliseconds: Int Refined NonNegative
-  )
+  case class DatabaseConfig(host: String Refined IPv4, timeoutMilliseconds: Int Refined NonNegative)
 
   // You can do this:
   val config = DatabaseConfig(host = "127.0.0.1", timeoutMilliseconds = 16)
@@ -102,10 +98,7 @@ object RefinedScala {
 class RefinedScalaSpec extends AnyFunSuite {
 
   test("wrong call does not compile") {
-    RefinedScala.Document(
-      url = "https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model/Examples",
-      body = "<complete/>"
-    )
+    RefinedScala.Document(url = "https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model/Examples", body = "<complete/>")
     assertTypeError("""RefinedScala.Document("wrong url","<incomplete")""")
   }
 

@@ -32,7 +32,7 @@ object ControlStructures {
   // Exercise. Implement a "Fizz-Buzz" https://en.wikipedia.org/wiki/Fizz_buzz function using the if-then-else,
   // returning "fizzbuzz" for numbers which divide with 15, "fizz" for those which divide by 3 and "buzz" for
   // those which divide with 5, and returning the input number as a string for other numbers:
-  def fizzBuzz1(n: Int): String = ???
+  def fizzBuzz1(n: Int): String = if (n % 15 == 0) "fizzbuzz" else if (n % 3 == 0) "fizz" else if (n % 5 == 0) "buzz" else n.toString
 
   // Pattern Matching
   //
@@ -48,20 +48,20 @@ object ControlStructures {
   type ErrorMessage = String
   def monthName(x: Int): Either[ErrorMessage, String] = {
     x match {
-      case 1            => Right("January")
-      case 2            => Right("February")
-      case 3            => Right("March")
-      case 4            => Right("April")
-      case 5            => Right("May")
-      case 6            => Right("June")
-      case 7            => Right("July")
-      case 8            => Right("August")
-      case 9            => Right("September")
-      case 10           => Right("October")
-      case 11           => Right("November")
-      case 12           => Right("December")
-      case x if x <= 0  => Left(s"Month $x is too small")
-      case x            => Left(s"Month $x is too large")
+      case 1           => Right("January")
+      case 2           => Right("February")
+      case 3           => Right("March")
+      case 4           => Right("April")
+      case 5           => Right("May")
+      case 6           => Right("June")
+      case 7           => Right("July")
+      case 8           => Right("August")
+      case 9           => Right("September")
+      case 10          => Right("October")
+      case 11          => Right("November")
+      case 12          => Right("December")
+      case x if x <= 0 => Left(s"Month $x is too small")
+      case x           => Left(s"Month $x is too large")
     }
   }
 
@@ -69,16 +69,33 @@ object ControlStructures {
   // Question. What would you use in its place if you wanted to more properly handle multiple locales?
 
   // Exercise. Implement a "Fizz-Buzz" function using pattern matching:
-  def fizzBuzz2(n: Int): String = ???
+  def fizzBuzz2(n: Int): String = n match {
+    case n if n % 15 == 0 => "fizzbuzz"
+    case n if n % 3 == 0  => "fizz"
+    case n if n % 5 == 0  => "buzz"
+    case _                => n.toString
+  }
+
+  def fizzBuzz3(n: Int): String = (n % 5, n % 3) match {
+    case (0, 0) => "fizzbuzz"
+    case (_, 0) => "fizz"
+    case (0, _) => "buzz"
+    case _      => n.toString
+  }
 
   // Recursion
   //
   // A function which calls itself is called a recursive function. This is a commonly used way how to
   // express looping constructs in Functional Programming languages.
 
-  def sum1(list: List[Int]): Int = {
-    if (list.isEmpty) 0
-    else list.head + sum1(list.tail)
+  // def sum1(list: List[Int]): Int = {
+  // if (list.isEmpty) 0
+  // else list.head + sum1(list.tail)
+  // }
+
+  def sum1(list: List[Int]): Int = list match {
+    case Nil     => 0
+    case x :: xs => x + sum1(xs)
   }
 
   // Question. What are the risks of List#head and List#tail? How can you refactor `sum1` to avoid these invocations?
@@ -88,9 +105,9 @@ object ControlStructures {
   // @tailrec annotation verifies that a method will be compiled with tail call optimisation.
   @tailrec
   def last[A](list: List[A]): Option[A] = list match {
-    case Nil        => None
-    case x :: Nil   => Some(x)
-    case _ :: xs    => last(xs)
+    case Nil      => None
+    case x :: Nil => Some(x)
+    case _ :: xs  => last(xs)
   }
 
   // Recursion isn't used that often as it can be replaced with `foldLeft`, `foldRight`,
@@ -118,14 +135,22 @@ object ControlStructures {
   //
   // Thus `applyNTimesForInts(_ + 1, 4)(3)` should return `((((3 + 1) + 1) + 1) + 1)` or `7`.
   def applyNTimesForInts(f: Int => Int, n: Int): Int => Int = { x: Int =>
-    f(x + n) // replace with a correct implementation
+    if (n == 0) x else applyNTimesForInts(f, n - 1)(f(x))
+  // alternative:
+  // (1 to n).foldLeft(x)((acc, _) => f(acc))
+
+  // f(x + n) // replace with a correct implementation
   }
 
   // Exercise: Convert the function `applyNTimesForInts` into a polymorphic function `applyNTimes`:
   def applyNTimes[A](f: A => A, n: Int): A => A = { x: A =>
-    // replace with correct implementation
-    println(n)
-    f(x)
+    n match {
+      case 0 => x
+      case a => applyNTimes(f, n - 1)(f(x))
+    }
+  // replace with correct implementation
+  // println(n)
+  // f(x)
   }
 
   // `map`, `flatMap` and `filter` are not control structures, but methods that various collections (and
@@ -143,7 +168,7 @@ object ControlStructures {
   }
 
   // Question. What is the value of this code?
-  val listMapExample = List(1, 2, 3).map(x => x * 2)
+  val listMapExample = List(1, 2, 3).map(x => x * 2) // List(2, 4, 6)
 
   // As we will see in later lessons, `map` is a method that `Functor`-s have, and there are more `Functor`-s
   // than just collections (`IO`, `Future`, `Either`, `Option` are all `Functor`-s too).
@@ -207,9 +232,9 @@ object ControlStructures {
 
   // You can also add `if` guards to `for` comprehensions:
   val e = for {
-    x       <- a
+    x <- a
     if x % 2 == 1
-    y       <- b
+    y <- b
   } yield x + y
 
   // Question. What is the value of `e` above?
@@ -236,9 +261,21 @@ object ControlStructures {
     // findUserId to find UserId, validateAmount on the amount, findBalance to find previous
     // balances, and then updateAccount for both userId-s (with a positive and negative
     // amount, respectively):
-    println(s"$service, $fromUserWithName, $toUserWithName, $amount")
+    // println(s"$service, $fromUserWithName, $toUserWithName, $amount")
+    // ???
     import service._
-    ???
+
+    for {
+      _ <- validateUserName(fromUserWithName)
+      _ <- validateUserName(toUserWithName)
+      _ <- validateAmount(amount)
+      fromUser <- findUserId(fromUserWithName)
+      toUser <- findUserId(toUserWithName)
+      fromBalance <- findBalance(fromUser)
+      toBalance <- findBalance(toUser)
+      resultingFromAmount <- updateAccount(fromUser, fromBalance, -amount)
+      resultingToAmount <- updateAccount(toUser, toBalance, amount)
+    } yield (resultingFromAmount, resultingToAmount)
   }
 
   // Question. What are the questions would you ask - especially about requirements - before implementing
@@ -251,14 +288,18 @@ object ControlStructures {
   // Exercise:
   //
   // Given:
-  //  A = Set(0, 1, 2)
-  //  B = Set(true, false)
+  val A = Set(0, 1, 2)
+  val B = Set(true, false)
   //
   // List all the elements in `A * B`.
   //
   // Use a "for comprehension" in your solution.
 
-  val AProductB: Set[(Int, Boolean)] = Set()
+  val AProductB: Set[(Int, Boolean)] =
+    for {
+      int <- A
+      bool <- B
+    } yield (int, bool)
 
   // Exercise:
   //
@@ -270,7 +311,8 @@ object ControlStructures {
   //
   // Use "map" and `++` (`Set` union operation) in your solution.
 
-  val ASumB: Set[Either[Int, Boolean]] = Set()
+  val ASumB: Set[Either[Int, Boolean]] =
+    A.map(Left(_)) ++ B.map(Right(_))
 
   // Scala inherits the standard try-catch-finally construct from Java:
   def printFile(fileName: String): Unit = {
@@ -279,8 +321,8 @@ object ControlStructures {
     try { // executed until an exception happens
       source.getLines() foreach println
     } catch { // exception handlers
-      case e: FileNotFoundException   => println(s"Couldn't find the file: $e")
-      case e: Exception               => println(s"Exception occurred: $e")
+      case e: FileNotFoundException => println(s"Couldn't find the file: $e")
+      case e: Exception             => println(s"Exception occurred: $e")
     } finally { // executed even if an exception happens
       source.close
     }

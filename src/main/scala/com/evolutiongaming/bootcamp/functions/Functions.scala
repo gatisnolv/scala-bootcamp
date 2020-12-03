@@ -1,6 +1,7 @@
 package com.evolutiongaming.bootcamp.functions
 
 import java.time.Instant
+import scala.util.Try
 
 object Functions {
   // Functions are expressions that have parameters, and take arguments.
@@ -42,7 +43,6 @@ object Functions {
 
   // --
 
-
   // In Scala, every concrete type is a type of some class or trait
   // `(String => String)` is the same as scala.Function1[String, String]
   // `scala.Function1[A, B]` is a trait, where `A` and `B` are type parameters
@@ -67,15 +67,17 @@ object Functions {
   processText("some text", _ + "!!")
 
   // Anonymous function expands to implementation of scala.Function1 trait
-  processText("some text", new Function1[String, String] {
-    override def apply(v1: String): String = v1 + "!!"
-  })
+  processText(
+    "some text",
+    new Function1[String, String] {
+      override def apply(v1: String): String = v1 + "!!"
+    }
+  )
 
   // Method can be passed as a function, but it is not a function value, it's just converted automatically
   def trimAndWrap(v: String): String = s"<${v.trim}>"
 
   processText("xxx", trimAndWrap)
-
 
   // Subclassing Functions
   // One nice aspect of functions being traits is that we can subclass the function type
@@ -99,14 +101,16 @@ object Functions {
 
   // Exercise.
   // Implement `mapOption` a function. Do not use scala option api
-  def mapOption[A, B](option: Option[A], f: A => B): Option[B] = ???
+  def mapOption[A, B](option: Option[A], f: A => B): Option[B] = option match {
+    case Some(value) => Some(f(value))
+    case None        => None
+  }
 
   // --
 
-
   // The pattern matching block expands to the Function1 instance
-  val pingPong: String => String = {
-    case "ping" => "pong"
+  val pingPong: String => String = { case "ping" =>
+    "pong"
   }
 
   // Question. What happens next?
@@ -117,20 +121,19 @@ object Functions {
 
   // Partial functions is another trait which extends Function and has `isDefinedAt` method
 
-  val pingPongPF: PartialFunction[String, String] = {
-    case "ping" => "pong"
+  val pingPongPF: PartialFunction[String, String] = { case "ping" =>
+    "pong"
   }
 
   pingPongPF.isDefinedAt("ping") // > true
   pingPongPF.isDefinedAt("hi") // > false
-
 
   // If expected type is a PF then a pattern matching block will expended to PF implementation
 
   val pingPongPFImpl: PartialFunction[String, String] = new PartialFunction[String, String] {
     override def isDefinedAt(x: String): Boolean = x match {
       case "ping" => true
-      case _ => false
+      case _      => false
     }
 
     override def apply(v: String): String = v match {
@@ -142,8 +145,8 @@ object Functions {
   val eithers: Seq[Either[String, Double]] = List("123", "456", "789o")
     .map(x => x.toDoubleOption.toRight(s"Failed to parse $x"))
 
-  val errors: Seq[String] = eithers.collect {
-    case Left(x) => x
+  val errors: Seq[String] = eithers.collect { case Left(x) =>
+    x
   }
 
   // We can make a function that returns another function
@@ -155,12 +158,10 @@ object Functions {
     if (from == to) message else message.reverse
   }
 
-  def translateFromRus: (Language, String) => String =
-    (to: String, message: Language) => translate(message, "rus", to)
+  def translateFromRus: (Language, String) => String = (to: String, message: Language) => translate(message, "rus", to)
 
   // `=>` has right associative law
-  def translateF: Language => (Language => (String => String)) =
-    (from: Language) => (to: Language) => (message: String) => translate(message, from, to)
+  def translateF: Language => (Language => (String => String)) = (from: Language) => (to: Language) => (message: String) => translate(message, from, to)
 
   val fromRu = translateF("ru")
   val fromRuToEn = fromRu("en")
@@ -192,8 +193,7 @@ object Functions {
   def plus(a: Int, b: Int): Int = a + b
 
   // Is `mapLookup` a pure function? Why?
-  def mapLookup(map: Map[String, Int], key: String): Int =
-    map(key)
+  def mapLookup(map: Map[String, Int], key: String): Int = map(key)
 
   // Pure function should:
   // - be total (not partial)
@@ -204,7 +204,6 @@ object Functions {
   // - not use `null`
 
   // A function without side effects only returns a value
-
 
   // Exercise. Provide an example of pure functions
   // Question. If a function return for all inputs the same value, is this function pure?
@@ -217,21 +216,24 @@ object Functions {
   // Potential compiler optimisations
   // Make parallel processing easier
 
-
   // Exercises. Convert the following function into a pure function.
   type ??? = Nothing // just to make it compile and indicate that return type should be changed
 
   //
   def parseDate(s: String): Instant = Instant.parse(s)
-  def parseDatePure(s: String): ??? = ???
+  def parseDatePure(s: String): Option[Instant] = Try(Instant.parse(s)).toOption
 
   //
   def divide(a: Int, b: Int): Int = a / b
-  def dividePure(a: Int, b: Int): ??? = ???
+  def dividePure(a: Int, b: Int): Either[String, Int] = b match {
+    case 0 => Left("Division by 0")
+    case _ => Right(a / b)
+  }
 
   //
   def isAfterNow(date: Instant): Boolean = date.isAfter(Instant.now())
-  def isAfterNowPure(/* ??? */): Boolean = ???
+  def isAfterNowPure(date: Instant, currentTime: Instant): Boolean = date.isAfter(currentTime)
+  def isAfterNowPurePerhapsBetter(date: Instant, nowProvider: () => Instant): Boolean = date.isAfter(nowProvider())
 
   //
   case class Nel[T](head: T, rest: List[T])
@@ -239,7 +241,10 @@ object Functions {
     if (list.isEmpty) println("ERROR: provide non empty list")
     Nel(list.head, list.tail)
   }
-  def nelPure[T](list: List[T]): ??? = ???
+  def nelPure[T](list: List[T]): Option[Nel[T]] = list match {
+    case Nil     => None
+    case x :: xs => Some(Nel(x, xs))
+  }
 
   // --
 

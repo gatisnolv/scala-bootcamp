@@ -17,6 +17,9 @@ import org.http4s.server.blaze.BlazeServerBuilder
 
 import scala.concurrent.ExecutionContext
 import scala.util.Try
+import cats.data.Validated.Valid
+import cats.data.Validated.Invalid
+import cats.data.NonEmptyList
 
 object HttpIntroduction {
 
@@ -136,8 +139,7 @@ object HttpServer extends IOApp {
     // Http4s provides a few predefined extractor objects, others must be supplied manually:
     // import org.http4s.dsl.io.{IntVar, LongVar, UUIDVar}
     object LocalDateVar {
-      def unapply(value: String): Option[LocalDate] =
-        Try(LocalDate.parse(value)).toOption
+      def unapply(value: String): Option[LocalDate] = Try(LocalDate.parse(value)).toOption
     }
 
     // URL query parameters must have corresponding `QueryParamDecoderMatcher` objects to extract them.
@@ -151,6 +153,14 @@ object HttpServer extends IOApp {
         .toValidatedNel
     }
     object LocalDateMatcher extends QueryParamDecoderMatcher[LocalDate](name = "date")
+
+    implicit val timestampDecoder: QueryParamDecoder[Instant] = { param =>
+      Validated
+        .catchNonFatal(Instant.parse(param.value))
+        .leftMap(t => ParseFailure(s"Failed to decode Instant", t.getMessage))
+        .toValidatedNel
+    }
+    object InstantMatcher extends ValidatingQueryParamDecoderMatcher[Instant](name = "timestamp")
 
     HttpRoutes.of[IO] {
 
@@ -166,6 +176,12 @@ object HttpServer extends IOApp {
       // 200 OK status must be returned with "Timestamp is valid" string in the body. If not valid,
       // 400 Bad Request status must be returned with "Timestamp is invalid" string in the body.
       // curl "localhost:9001/params/validate?timestamp=2020-11-04T14:19:54.736Z"
+
+      case GET -> Root / "params" / "validate" :? InstantMatcher(result) =>
+        result match {
+          case Valid(_)   => Ok("Timestamp is valid")
+          case Invalid(_) => BadRequest("Timestamp is invalid")
+        }
     }
   }
 
@@ -179,14 +195,18 @@ object HttpServer extends IOApp {
 
     // curl "localhost:9001/headers" -H "Request-Header: Request header value"
     case req @ GET -> Root / "headers" =>
-      Ok(s"Received headers: ${ req.headers }", Header("Response-Header", "Response header value"))
+      Ok(s"Received headers: ${req.headers}", Header("Response-Header", "Response header value"))
 
     // Exercise 2. Implement HTTP endpoint that attempts to read the value of the cookie named "counter". If
     // present and contains an integer value, it should add 1 to the value and request the client to update
     // the cookie. Otherwise it should request the client to store "1" in the "counter" cookie.
     // curl -v "localhost:9001/cookies" -b "counter=9"
-  }
 
+    case req @ GET -> Root / "cookies" =>
+      val cookie = req.cookies.find(_.name == "counter")
+      val value = cookie.flatMap(_.content.toIntOption).fold(1)(_ + 1)
+      Ok(value.toString).map(_.addCookie(ResponseCookie("counter", value.toString)))
+  }
   // JSON ENTITIES
 
   // Http4s provides integration with the following JSON libraries out of the box: Circe, Argonaut and Json4s.
@@ -205,7 +225,7 @@ object HttpServer extends IOApp {
       // curl -XPOST "localhost:9001/json" -d '{"name": "John", "age": 18}' -H "Content-Type: application/json"
       case req @ POST -> Root / "json" =>
         req.as[User].flatMap { user =>
-          val greeting = Greeting(text = s"Hello, ${ user.name }!", timestamp = Instant.now())
+          val greeting = Greeting(text = s"Hello, ${user.name}!", timestamp = Instant.now())
           Ok(greeting.asJson)
         }
     }
@@ -228,22 +248,29 @@ object HttpServer extends IOApp {
     // curl -XPOST "localhost:9001/multipart" -F "character=n" -F file=@text.txt
     case req @ POST -> Root / "multipart" =>
       req.as[Multipart[IO]].flatMap { multipart =>
-        ???
+        (for {
+          character <- getText("character", multipart) >>= (c => if (c.length != 1) IO.raiseError(new Exception("Inappropriate length for character")) else IO.pure(c.charAt(0)))
+          text <- getText("file", multipart)
+          response <- Ok(text.count(_ == character).toString)
+        } yield response).handleErrorWith(_ => BadRequest())
       }
+  }
+
+  def getText(partName: String, multipart: Multipart[IO]) = {
+    multipart.parts.find(_.name.fold(false)(_ == partName)).fold(IO.raiseError(new Exception("Part not found")): IO[String])(x => x.as[String])
   }
 
   private[http] val httpApp = {
     helloRoutes <+> paramsRoutes <+> headersRoutes <+> jsonRoutes <+> multipartRoutes
   }.orNotFound
 
-  override def run(args: List[String]): IO[ExitCode] =
-    BlazeServerBuilder[IO](ExecutionContext.global)
-      .bindHttp(port = 9001, host = "localhost")
-      .withHttpApp(httpApp)
-      .serve
-      .compile
-      .drain
-      .as(ExitCode.Success)
+  override def run(args: List[String]): IO[ExitCode] = BlazeServerBuilder[IO](ExecutionContext.global)
+    .bindHttp(port = 9001, host = "localhost")
+    .withHttpApp(httpApp)
+    .serve
+    .compile
+    .drain
+    .as(ExitCode.Success)
 }
 
 object HttpClient extends IOApp {
@@ -254,9 +281,9 @@ object HttpClient extends IOApp {
 
   private def printLine(string: String = ""): IO[Unit] = IO(println(string))
 
-  def run(args: List[String]): IO[ExitCode] =
-    BlazeClientBuilder[IO](ExecutionContext.global).resource
-      .parZip(Blocker[IO]).use { case (client, blocker) =>
+  def run(args: List[String]): IO[ExitCode] = BlazeClientBuilder[IO](ExecutionContext.global).resource
+    .parZip(Blocker[IO])
+    .use { case (client, blocker) =>
       for {
         _ <- printLine(string = "Executing simple GET and POST requests:")
         _ <- client.expect[String](uri / "hello" / "world") >>= printLine
@@ -269,6 +296,7 @@ object HttpClient extends IOApp {
 
         // Exercise 4. Call HTTP endpoint, implemented in scope of Exercise 1.
         // curl "localhost:9001/params/validate?timestamp=2020-11-04T14:19:54.736Z"
+        _ <- client.expect[String]((uri / "params" / "validate").withQueryParam(key = "timestamp", value = "2020-11-04T14:19:54.736Z")) >>= printLine
         _ <- printLine()
 
         _ <- printLine(string = "Executing requests with headers and cookies:")
@@ -276,6 +304,8 @@ object HttpClient extends IOApp {
 
         // Exercise 5. Call HTTP endpoint, implemented in scope of Exercise 2.
         // curl -v "localhost:9001/cookies" -b "counter=9"
+        _ <- client.expect[String](uri / "cookies") >>= printLine
+        _ <- client.expect[String](Method.GET(uri / "cookies").map(_.addCookie(RequestCookie("counter", "3")))) >>= printLine
         _ <- printLine()
 
         _ <- printLine(string = "Executing requests with JSON entities:")
@@ -286,7 +316,8 @@ object HttpClient extends IOApp {
           // User JSON encoder can also be declared explicitly instead of importing from `CirceEntityCodec`:
           // implicit val helloEncoder = org.http4s.circe.jsonEncoderOf[IO, Hello]
 
-          client.expect[Greeting](Method.POST(User("John", 18), uri / "json"))
+          client
+            .expect[Greeting](Method.POST(User("John", 18), uri / "json"))
             .flatMap(greeting => printLine(greeting.toString))
         }
         _ <- printLine()
@@ -294,15 +325,13 @@ object HttpClient extends IOApp {
         _ <- printLine(string = "Executing multipart requests:")
         _ <- {
           val file = getClass.getResource("/text.txt")
-          val multipart = Multipart[IO](Vector(
-            Part.formData("character", "n"),
-            Part.fileData("file", file, blocker, `Content-Type`(MediaType.text.plain))
-          ))
+          val multipart = Multipart[IO](Vector(Part.formData("character", "n"), Part.fileData("file", file, blocker, `Content-Type`(MediaType.text.plain))))
           client.expect[String](Method.POST(multipart, uri / "multipart").map(_.withHeaders(multipart.headers))) >>= printLine
         }
         _ <- printLine()
       } yield ()
-    }.as(ExitCode.Success)
+    }
+    .as(ExitCode.Success)
 }
 
 // Attributions and useful links:

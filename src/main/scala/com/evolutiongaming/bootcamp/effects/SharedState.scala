@@ -43,16 +43,24 @@ object SynchronizationCommon {
   def run(friends: Friends): Unit = {
     def myRunnable(name: String): Runnable = new Runnable {
       override def run(): Unit = {
-        println("Thread " + Thread.currentThread().getName +
-          s" friends size  ${friends.getSize}")
-        println("Thread " + Thread.currentThread().getName +
-          s" trying to add a friend $name")
+        println(
+          "Thread " + Thread.currentThread().getName +
+            s" friends size  ${friends.getSize}"
+        )
+        println(
+          "Thread " + Thread.currentThread().getName +
+            s" trying to add a friend $name"
+        )
         friends.put(name)
-        println("Thread " + Thread.currentThread().getName +
-          s" has friends size ${friends.getSize}")
+        println(
+          "Thread " + Thread.currentThread().getName +
+            s" has friends size ${friends.getSize}"
+        )
 
-        println("Thread " + Thread.currentThread().getName +
-          s" has friends list ${friends.getFriendsList}")
+        println(
+          "Thread " + Thread.currentThread().getName +
+            s" has friends list ${friends.getFriendsList}"
+        )
       }
     }
 
@@ -225,13 +233,11 @@ object GetSetExample extends IOApp {
 
   import IosCommon.logger
 
-  def report(messagesRef: Ref[IO, List[String]], msg: String): IO[Unit] =
-    for {
-      t <- messagesRef.get
-      _ <- logger.info(s"adding $msg to $t")
-      _ <- messagesRef.set(msg :: t)
-    } yield ()
-
+  def report(messagesRef: Ref[IO, List[String]], msg: String): IO[Unit] = for {
+    t <- messagesRef.get
+    _ <- logger.info(s"adding $msg to $t")
+    _ <- messagesRef.set(msg :: t)
+  } yield ()
 
   val program: IO[Unit] = for {
     messages <- Ref[IO].of(List.empty[String])
@@ -244,22 +250,20 @@ object GetSetExample extends IOApp {
 }
 
 /*
-* Why do we need modify ?
-* Because Ref#get could happen after another Ref#update. `update` and then `get` is not Atomic.
-*/
+ * Why do we need modify ?
+ * Because Ref#get could happen after another Ref#update. `update` and then `get` is not Atomic.
+ */
 object UpdateExample extends IOApp {
 
   import IosCommon.logger
 
   val counterRef: IO[Ref[IO, Int]] = Ref.of[IO, Int](0)
 
-  def inc(counterRef: Ref[IO, Int]): IO[Unit] =
-    for {
-      _ <- counterRef.update(_ + 1)
-      counter <- counterRef.get
-      _ <- logger.info(s"counter value is $counter")
-    } yield ()
-
+  def inc(counterRef: Ref[IO, Int]): IO[Unit] = for {
+    _ <- counterRef.update(_ + 1)
+    counter <- counterRef.get
+    _ <- logger.info(s"counter value is $counter")
+  } yield ()
 
   val program: IO[Unit] = for {
     counter <- Ref[IO].of(0)
@@ -273,7 +277,7 @@ object UpdateExample extends IOApp {
 
 /*
  * Ref#modify will allow you to perform update and return something in an atomic way.
-*/
+ */
 object ModifyExample extends IOApp {
 
   import IosCommon.logger
@@ -295,11 +299,10 @@ object ModifyExample extends IOApp {
 /*
  * Limitations of Ref is that we cannot have effectful updates on Ref
  * Try to think what will happen if we would try to implement following method ?
-*/
+ */
 object RefLimitation {
 
   import ExerciseZero.IOAtomicRef
-
   trait EffectfullRef[A] extends IOAtomicRef[A] {
     // ....
     def modifyM[B](f: A => IO[(A, B)]): IO[B]
@@ -319,7 +322,7 @@ object RefLimitation {
     override def modifyM[B](f: A => IO[(A, B)]): IO[B] = {
       def run(): IO[B] = {
         val old = ar.get()
-        val smth: IO[(A, B)] = f(old)
+        val smth: IO[(A, B)] = f(old) //problem is that this side effect might get executed multiple times
 
         smth.flatMap { case (a, b) =>
           if (ar.compareAndSet(old, a))
@@ -358,36 +361,28 @@ object SemaphoreExample extends IOApp {
 
   import IosCommon.logger
 
-  def someExpensiveTask: IO[Unit] =
-    IO.sleep(3.second) >>
-      logger.info("expensive task took 3 seconds")
+  def someExpensiveTask: IO[Unit] = IO.sleep(3.second) >>
+    logger.info("expensive task took 3 seconds")
 
-  def process1(sem: Semaphore[IO]): IO[Unit] =
-    logger.info("start first process") >>
-      sem.withPermit(someExpensiveTask) >>
-      logger.info("finish fist process") >>
-      process1(sem)
+  def process1(sem: Semaphore[IO]): IO[Unit] = logger.info("start first process") >>
+    sem.withPermit(someExpensiveTask) >>
+    logger.info("finish fist process") >>
+    process1(sem)
 
+  def process2(sem: Semaphore[IO]): IO[Unit] = logger.info("start second process") >>
+    sem.withPermit(someExpensiveTask) >>
+    logger.info("finish second process") >>
+    process2(sem)
 
-  def process2(sem: Semaphore[IO]): IO[Unit] =
-    logger.info("start second process") >>
-      sem.withPermit(someExpensiveTask) >>
-      logger.info("finish second process") >>
-      process2(sem)
+  def process3: IO[Unit] = logger.info("start third process") >>
+    someExpensiveTask >>
+    logger.info("finish third process") >>
+    process3
 
-
-  def process3: IO[Unit] =
-    logger.info("start third process") >>
-      someExpensiveTask >>
-      logger.info("finish third process") >>
-      process3
-
-  def process4: IO[Unit] =
-    logger.info("start forth process") >>
-      someExpensiveTask >>
-      logger.info("finish forth process") >>
-      process4
-
+  def process4: IO[Unit] = logger.info("start forth process") >>
+    someExpensiveTask >>
+    logger.info("finish forth process") >>
+    process4
 
   def run(args: List[String]): IO[ExitCode] = {
     val semaphore = Semaphore[IO](1)
@@ -412,7 +407,7 @@ object SemaphoreExample extends IOApp {
 
     for {
       sem <- semaphore
-      _ <- List(helper3(sem),helper4(sem)).parSequence.void
+      _ <- List(helper3(sem), helper4(sem)).parSequence.void
 
     } yield (ExitCode.Success)
 
@@ -437,7 +432,7 @@ object SerialRefExercise extends IOApp {
     def update(f: A => F[A]): F[Unit]
   }
 
-  def of[F[_] : Concurrent, A](value: A): F[SerialRef[F, A]] = {
+  def of[F[_]: Concurrent, A](value: A): F[SerialRef[F, A]] = {
     for {
       s <- Semaphore[F](1)
       r <- Ref[F].of(value)
@@ -462,7 +457,7 @@ object SerialRefExercise extends IOApp {
 
   override def run(args: List[String]): IO[ExitCode] = {
     def modifyHelperIO(ref: SerialRef[IO, Int], duration: FiniteDuration, i: Int, returnStr: String): IO[String] =
-    //      logger.info(s"$returnStr started") *> ref.modify(x => IO.sleep(duration) *> IO((x + i, returnStr + "!!!!" ))) <* logger.info(s" $returnStr finished")
+      //      logger.info(s"$returnStr started") *> ref.modify(x => IO.sleep(duration) *> IO((x + i, returnStr + "!!!!" ))) <* logger.info(s" $returnStr finished")
       logger.info(s"$returnStr started") *> ref.modify(x => IO.sleep(duration) *> IO((x + i, returnStr + "!!!!"))).flatTap(s => logger.info(s"$s finished"))
 
     for {
@@ -583,19 +578,18 @@ object HandlingErrorsWithDeferred extends IOApp {
  */
 object RefsExerciseTwo extends IOApp {
 
+  case class Foo(i: Int)
 
-  case class Foo(i:Int)
-
-  List(Foo(1),Foo(2)).collect{
-    case a@Foo(_) => a.i
+  List(Foo(1), Foo(2)).collect { case a @ Foo(_) =>
+    a.i
   }
 
   def memoize[F[_], A](f: F[A])(implicit C: Concurrent[F]): F[F[A]] = {
     Ref.of[F, Option[Deferred[F, A]]](None).map { ref =>
       Deferred[F, A].flatMap { d =>
         ref.modify {
-          case None => (Some(d) , f.flatTap(eit => d.complete(eit)))
-          case v@Some(other) => (v, other.get)
+          case None            => (Some(d), f.flatTap(eit => d.complete(eit)))
+          case v @ Some(other) => (v, other.get)
         }.flatten
       }
     }
@@ -622,7 +616,6 @@ object RefsExerciseTwo extends IOApp {
       y <- mem
       _ <- IO(println(y))
     } yield ()
-
 
     val errorProgram = IO {
       println("Gonna Boom!");
@@ -688,7 +681,8 @@ object MVarQueueExample extends IOApp {
 
     logger.info(s"consume($sum, $c)") >> IO(if (c < N) {
       mvar.take
-        .timeout(100.millisecond).flatTap(n => logger.info(s"consumed $n"))
+        .timeout(100.millisecond)
+        .flatTap(n => logger.info(s"consumed $n"))
         .flatMap { v =>
           consume(mvar, v + sum, c + 1)
         }
@@ -703,7 +697,6 @@ object MVarQueueExample extends IOApp {
     _ <- produce(mv, 0)
   } yield ExitCode.Success
 }
-
 
 /*
  * Question: what will happen in the code below ?
@@ -744,34 +737,30 @@ object MySemaphoreMVarExercise extends IOApp {
     def withPermit[A](fa: F[A]): F[A]
   }
 
-  class MySemaphoreMVar[F[_] : Concurrent](mvar: MVar2[F, Unit]) extends MySemaphore[F] {
+  class MySemaphoreMVar[F[_]: Concurrent](mvar: MVar2[F, Unit]) extends MySemaphore[F] {
     override def acquire: F[Unit] = mvar.take
 
     override def release: F[Unit] = mvar.put(())
 
-    override def withPermit[A](fa: F[A]): F[A] = acquire.bracket(_ =>fa)(_ => release)
+    override def withPermit[A](fa: F[A]): F[A] = acquire.bracket(_ => fa)(_ => release)
   }
 
   object MySemaphoreMVar {
-    def of[F[_] : Concurrent]: F[MySemaphoreMVar[F]] = MVar.of[F, Unit](()).map(mv => new MySemaphoreMVar[F](mv))
+    def of[F[_]: Concurrent]: F[MySemaphoreMVar[F]] = MVar.of[F, Unit](()).map(mv => new MySemaphoreMVar[F](mv))
   }
 
+  def someExpensiveTask: IO[Unit] = IO.sleep(3.second) >>
+    logger.info("expensive task took 3 second")
 
-  def someExpensiveTask: IO[Unit] =
-    IO.sleep(3.second) >>
-      logger.info("expensive task took 3 second")
+  def process1(sem: MySemaphore[IO]): IO[Unit] = logger.info("start first process") >>
+    sem.withPermit(someExpensiveTask) >>
+    logger.info("finish fist process") >>
+    process1(sem)
 
-  def process1(sem: MySemaphore[IO]): IO[Unit] =
-    logger.info("start first process") >>
-      sem.withPermit(someExpensiveTask) >>
-      logger.info("finish fist process") >>
-      process1(sem)
-
-  def process2(sem: MySemaphore[IO]): IO[Unit] =
-    logger.info("start second process") >>
-      sem.withPermit(someExpensiveTask) >>
-      logger.info("finish second process") >>
-      process2(sem)
+  def process2(sem: MySemaphore[IO]): IO[Unit] = logger.info("start second process") >>
+    sem.withPermit(someExpensiveTask) >>
+    logger.info("finish second process") >>
+    process2(sem)
 
   def run(args: List[String]): IO[ExitCode] = {
     for {
@@ -781,14 +770,23 @@ object MySemaphoreMVarExercise extends IOApp {
   }
 }
 
-
 /*
  * Implement race method (who completed first - wins, other should be canceled) using MVar
  * Tip: Recall that we can use Fibers (IO(...).start) in order to schedule task in background
  */
 object RaceMVarExercise extends IOApp {
 
-  def race[A](taskA: IO[A], taskB: IO[A]): IO[A] = ???
+  def race[A](taskA: IO[A], taskB: IO[A]): IO[A] = {
+    for {
+      mvar <- MVar.empty[IO, Int]
+      afib <- (taskA <* mvar.tryPut(1)).start
+      bfib <- (taskB <* mvar.tryPut(2)).start
+      which <- mvar.read
+      res <-
+        if (which == 1) { bfib.cancel; afib.join }
+        else { afib.cancel; bfib.join }
+    } yield res
+  }
 
   override def run(args: List[String]): IO[ExitCode] = {
 
@@ -806,12 +804,5 @@ object RaceMVarExercise extends IOApp {
       _ <- logger.info(s"index should be 0, $index ")
     } yield ExitCode.Success
 
-
   }
 }
-
-
-
-
-
-

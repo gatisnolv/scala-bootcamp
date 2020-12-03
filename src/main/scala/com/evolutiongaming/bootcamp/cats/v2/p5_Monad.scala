@@ -8,7 +8,6 @@ object p5_Monad {
     * that implements two operations `bind` and `unit` and satisfies three monadic laws is a monad.
     * `Unit` usually called `pure` in Scala, and `bind` is a `flatMap`.
     *
-    *
     * Monadic laws are:
     * right identity - calling pure and transforming the result with func is the same as calling func
     * left identity - passing pure to flatMap is the same as doing nothing
@@ -22,8 +21,8 @@ object p5_Monad {
 
     /**
       * Ex 5.0 implement map in terms of pure and flatMap.
-      * */
-    def map[A, B](fa: F[A])(f: A => B): F[B] = ??? /* your code here */
+      */
+    def map[A, B](fa: F[A])(f: A => B): F[B] = flatMap(fa)(v => pure(f(v)))
   }
 
   /**
@@ -62,41 +61,43 @@ object p5_Monad {
   val listM: EvoMonad[List] = new EvoMonad[List] {
     override def pure[A](a: A): List[A] = List(a)
 
-    override def flatMap[A, B](fa: List[A])(f: A => List[B]): List[B] =
-      ???
+    override def flatMap[A, B](fa: List[A])(f: A => List[B]): List[B] = fa match {
+      case Nil     => Nil
+      case x :: xs => f(x) ::: flatMap(xs)(f)
+    }
   }
+
   /**
     * Ex 5.2 implement EvoMonad for Option
-    * */
+    */
   val optionM: EvoMonad[Option] = new EvoMonad[Option] {
-    override def pure[A](a: A): Option[A] = ???
+    override def pure[A](a: A): Option[A] = Option(a)
 
-    override def flatMap[A, B](fa: Option[A])(f: A => Option[B]): Option[B] =
-      ???
+    override def flatMap[A, B](fa: Option[A])(f: A => Option[B]): Option[B] = fa match {
+      case Some(a) => f(a)
+      case None    => None
+    }
   }
 
+  /**
+    * Cats provides a Monad type class, as well as a number of default instances
+    */
+  import cats.Monad
+  import cats.instances.option._
 
+  val maybeInt: Option[Int] = Monad[Option].pure(1)
+  val maybeStr: Option[String] = Monad[Option].pure("Hi")
 
-    /**
-      * Cats provides a Monad type class, as well as a number of default instances
-     **/
-    import cats.Monad
-    import cats.instances.option._
+  /**
+    * When we work with a concrete Monad like List or Option we can call .flatMap .pure or .map directly.
+    * But what if we have some abstract effect F[_]?
+    * As we have seen before, we can demand an instance of a certain type class to be present in the implicit context.
+    * And we need also to import syntax for certain operations:
+    */
+  import cats.syntax.flatMap._
+  import cats.syntax.functor._ // map
 
-    val maybeInt: Option[Int] = Monad[Option].pure(1)
-    val maybeStr: Option[String] = Monad[Option].pure("Hi")
-
-    /**
-      * When we work with a concrete Monad like List or Option we can call .flatMap .pure or .map directly.
-      * But what if we have some abstract effect F[_]?
-      * As we have seen before, we can demand an instance of a certain type class to be present in the implicit context.
-      * And we need also to import syntax for certain operations:
-     **/
-    import cats.syntax.flatMap._
-    import cats.syntax.functor._ // map
-
-    def someFancyFunc[F[_]: Monad](log: String => F[Unit], doSomethingElse: F[Unit]): F[ExitCode] =
-      log("Feels good")
-        .flatMap(_ => doSomethingElse)
-        .map(_ => ExitCode.Success)
+  def someFancyFunc[F[_]: Monad](log: String => F[Unit], doSomethingElse: F[Unit]): F[ExitCode] = log("Feels good")
+    .flatMap(_ => doSomethingElse)
+    .map(_ => ExitCode.Success)
 }

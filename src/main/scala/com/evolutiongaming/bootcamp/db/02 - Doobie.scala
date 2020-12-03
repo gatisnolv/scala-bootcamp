@@ -10,7 +10,7 @@ object Doobie extends IOApp {
   override def run(args: List[String]): IO[ExitCode] = {
 
     /** simplest possible `doobie` program */
-    val rng: ConnectionIO[String] = "42".pure[ConnectionIO]
+    // val rng: ConnectionIO[String] = "42".pure[ConnectionIO]
 
     /** simple queries */
 //    val rng = sql"SELECT random()".query[Double].unique // expects exactly one line as response
@@ -44,20 +44,28 @@ object Doobie extends IOApp {
 //    }
 
     /** `create`, `insert` and `update` */
-//    val rng: doobie.ConnectionIO[(String, String)] = {
-//      val create = sql"CREATE table kv(key VARCHAR(100) PRIMARY KEY, value VARCHAR(100))"
-//      val key = "key"
-//      val value = "value"
-//      val insert = sql"INSERT INTO kv (key, value) VALUES ($key, $value)"
-//      val newValue = "fixed value"
-//      val update = sql"UPDATE kv SET value = $newValue WHERE key = $key"
-//      val select = sql"SELECT key, value FROM kv"
-//
-//      create.update.run *>
-//        insert.update.run *>
-//        update.update.run *>
-//        select.query[(String, String)].unique
-//    }
+    val rng: doobie.ConnectionIO[(String, String)] = {
+      val create = sql"CREATE table kv(key VARCHAR(100) PRIMARY KEY, value VARCHAR(100))"
+      val key = "key"
+      val value = "value"
+      val insert = sql"INSERT INTO kv (key, value) VALUES ($key, $value)"
+      val newValue = "fixed value"
+      val update = sql"UPDATE kv SET value = $newValue WHERE key = $key"
+      val select = sql"SELECT key, value FROM kv"
+      val delete = sql"delete from kv where key = $key"
+      val drop = sql"drop table kv"
+
+      val x = (create.update.run *>
+        insert.update.run *>
+        update.update.run *>
+        select.query[(String, String)].unique)
+      for {
+        data <- x
+        _ <- delete.update.run
+        _ <- drop.update.run
+        // data <- select.query[(String, String)].unique // failes, because table was dropped
+      } yield data
+    }
 
     DbTransactor
       .make[IO]

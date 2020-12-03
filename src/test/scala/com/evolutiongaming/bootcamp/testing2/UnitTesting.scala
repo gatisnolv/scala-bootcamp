@@ -59,7 +59,6 @@ import scala.concurrent.Promise
 // Besides we use contract driven test here such as https://docs.pact.io/,
 // but the adoption is relatively small for now.
 
-
 // *Structure*
 //
 // In Java world one of the most used build tools is called Maven. The idea
@@ -75,7 +74,6 @@ import scala.concurrent.Promise
 //
 // The classes under test for this workshop are stored in `src/main/scala/testing2`
 // and the tests themselves are stored in `src/test/scala/testing2`.
-
 
 // *Excercise 1*
 //
@@ -198,6 +196,10 @@ class Excercise2Spec extends AnyFreeSpec {
       assert(calculator.enter(7) == Right(Calculator(7, 0, None)))
       assert(calculator.enter(12) == Left("digit out of range"))
     }
+    "fails if incorrect number is pressed" - {
+      val calculator = Calculator()
+      assert(calculator.enter(12) == Left("digit out of range"))
+    }
     "does nothing" - {
       "when you just repeat pressing `=`" in {
         val calculator = Calculator()
@@ -221,6 +223,25 @@ class Excercise2Spec extends AnyFreeSpec {
 // sbt:scala-bootcamp> testOnly *testing2.Excercise3Spec
 //
 class Excercise3Spec extends AnyWordSpec {
+
+  "calculator" should {
+    "enters the number correctly" in {
+      val calculator = Calculator()
+      assert(calculator.enter(1) == Right(Calculator(1, 0, None)))
+      assert(calculator.enter(7) == Right(Calculator(7, 0, None)))
+      assert(calculator.enter(12) == Left("digit out of range"))
+    }
+    "fails if incorrect number is pressed" in {
+      val calculator = Calculator()
+      assert(calculator.enter(12) == Left("digit out of range"))
+    }
+    "does nothing" should {
+      "when you just repeat pressing `=`" in {
+        val calculator = Calculator()
+        assert(calculator.calculate.calculate.calculate.calculate == calculator)
+      }
+    }
+  }
 }
 
 // *Note*
@@ -251,14 +272,14 @@ class Excercise4Spec extends AnyFreeSpec with Matchers {
   "calculator" - {
     "enters the number correctly" in {
       val calculator = Calculator()
-      calculator.enter(1) should be (Right(Calculator(1, 0, None)))
-      assert(calculator.enter(7) == Right(Calculator(7, 0, None)))
-      assert(calculator.enter(12) == Left("digit out of range"))
+      calculator.enter(1) should be(Right(Calculator(1, 0, None)))
+      calculator.enter(7) should be(Right(Calculator(7, 0, None)))
+      calculator.enter(12) should be(Left("digit out of range"))
     }
     "does nothing" - {
       "when you just repeat pressing `=`" in {
         val calculator = Calculator()
-        assert(calculator.calculate.calculate.calculate.calculate == calculator)
+        calculator.calculate.calculate.calculate.calculate should be(calculator)
       }
     }
   }
@@ -291,8 +312,8 @@ class Excercise5Spec extends AnyFreeSpec with EitherValues {
     "enters the number correctly" in {
       val calculator = Calculator()
       assert(calculator.enter(1).right.value == Calculator(1, 0, None))
-      assert(calculator.enter(7) == Right(Calculator(7, 0, None)))
-      assert(calculator.enter(12) == Left("digit out of range"))
+      assert(calculator.enter(7).right.value == Calculator(7, 0, None))
+      assert(calculator.enter(12).left.value == "digit out of range")
     }
     "does nothing" - {
       "when you just repeat pressing `=`" in {
@@ -345,11 +366,19 @@ class Excercise5Spec extends AnyFreeSpec with EitherValues {
 //
 class Excercise6Spec extends AnyFunSuite {
 
-  test("name of the test 1") {
+  test("calculator enters the number correctly") {
+    val calculator = Calculator()
     // here goes your test 1
+    assert(calculator.enter(1) == Right(Calculator(1, 0, None)))
+    assert(calculator.enter(7) == Right(Calculator(7, 0, None)))
+    assert(calculator.enter(12) == Left("digit out of range"))
+
   }
-  test("name of the test 2") {
+
+  test("calculator does nothing when you just repeat pressing `=`") {
     // here goes your test 2
+    val calculator = Calculator()
+    assert(calculator.calculate.calculate.calculate.calculate == calculator)
   }
 
 }
@@ -369,7 +398,7 @@ class Excercise6Spec extends AnyFunSuite {
 class Excercise7Spec extends AnyFunSuite {
 
   test("HAL 9000 multiplies numbers correctly") {
-    // assert(HAL9000.twice(7) == 14)
+    assert(HAL9000.twice(7) == 14)
   }
 
 }
@@ -386,9 +415,12 @@ class Excercise7Spec extends AnyFunSuite {
 //
 // sbt:scala-bootcamp> testOnly *testing2.Excercise8Spec
 //
-class Excercise8Spec extends AnyFunSuite {
+class Excercise8Spec extends AnyFunSuite with Matchers {
 
   test("HAL 9000 behaves as expected when asked to open the door") {
+    assertThrows[RuntimeException](HAL9000.letAustronautIn())
+    // alternatively, using Matchers:
+    a[RuntimeException] should be thrownBy HAL9000.letAustronautIn()
   }
 
 }
@@ -410,7 +442,7 @@ class Excercise8Spec extends AnyFunSuite {
 class Excercise9Spec extends AnyFunSuite {
 
   test("HAL9000") {
-    assert(HAL9000.register1 == HAL9000.register2)
+    assert(HAL9000.register1 == HAL9000.register2, "registers don't match, watch out, HAL9000 going crazy")
   }
 
 }
@@ -463,8 +495,8 @@ object Excercise10 {
     def apply(repository: PlayerRepository, logging: Logging): PlayerService = new PlayerService {
 
       // NOTE: We do not have a returned type annotation and documentation here, why?
-      def deleteWorst(minimumScore: Int) = ???
-      def celebrate(bonus: Int) = ???
+      def deleteWorst(minimumScore: Int): Unit = repository.all filter (_.score < minimumScore) map { player => repository.delete(player.id) }
+      def celebrate(bonus: Int) = repository.all map { player => repository.update(player.copy(score = player.score + bonus)) }
 
     }
 
@@ -504,32 +536,44 @@ class Excercise10Spec extends AnyFunSuite {
 
   import Excercise10._
 
-  test("PlayerService.deleteWorst works correctly") {
+  class Fixture {
+    val repository = new PlayerRepository {
+      var players: List[Player] = List(Player("a", "Marta", "marta@bootcamp", 100), Player("b", "Maris", "maris@bootcamp", 200), Player("c", "Sergejs", "sergejs@bootcamp", 300))
+      def byId(id: String) = None
+      def all = players
+      def update(player: Player) = players = all map { p =>
+        if (p.id == player.id) player else p
+      }
+      def delete(id: String) = players = all filterNot (_.id == id)
 
-    // construct fixture
-    val repository = ???
-    val logging = ???
+    }
+    val logging = new Logging {
+      override def info(message: String): Unit = ???
+    }
     val service = PlayerService(repository, logging)
+  }
+
+  test("PlayerService.deleteWorst works correctly") {
+    // construct fixture
+    val fixture = new Fixture
 
     // perform the test
-    service.deleteWorst(???)
+    fixture.service.deleteWorst(200)
 
     // validate the results
-    assert(???)
+    assert(fixture.repository.all.length == 2)
   }
 
   test("PlayerService.celebrate works correctly") {
 
     // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService(repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.celebrate(???)
+    fixture.service.celebrate(101)
 
     // validate the results
-    assert(???)
+    assert(fixture.repository.all.filter(p => p.score == 301).nonEmpty)
   }
 
 }
@@ -643,8 +687,8 @@ object Excercise12 {
     /** Creates a new service working with existing repository */
     def apply(repository: PlayerRepository, logging: Logging): PlayerService = new PlayerService {
 
-      def deleteWorst(minimumScore: Int) = ???
-      def celebrate(bonus: Int) = ???
+      def deleteWorst(minimumScore: Int) = repository.all.map(_.filter(_.score < minimumScore) map { player => repository.delete(player.id) })
+      def celebrate(bonus: Int) = repository.all.map(_.map { player => repository.update(player.copy(score = player.score + bonus)) })
 
     }
 
@@ -661,32 +705,51 @@ class Excercise12Spec extends AsyncFunSuite {
 
   import Excercise12._
 
+  class Fixture {
+    val repository = new PlayerRepository {
+
+      val playersReference: AtomicReference[List[Player]] = new AtomicReference(
+        List(Player("a", "Marta", "marta@bootcamp", 100), Player("b", "Maris", "maris@bootcamp", 200), Player("c", "Sergejs", "sergejs@bootcamp", 300))
+      )
+      def byId(id: String) = Future { None }
+      def all = Future { playersReference.get }
+      def update(player: Player) = Future {
+        playersReference.set(playersReference.get map { p =>
+          if (p.id == player.id) player else p
+        })
+      }
+      def delete(id: String) = Future {
+        playersReference.set(playersReference.get.filterNot(_.id == id))
+      }
+
+    }
+    val logging = new Logging {
+      override def info(message: String) = ???
+    }
+    val service = PlayerService(repository, logging)
+  }
+
   test("PlayerService.deleteWorst works correctly") {
 
-    // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService(repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.deleteWorst(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.deleteWorst(200)
+      players <- fixture.repository.all
+    } yield assert(players.length == 2)
   }
 
   test("PlayerService.celebrate works correctly") {
 
     // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService(repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.celebrate(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.celebrate(101)
+      players <- fixture.repository.all
+    } yield assert(players.filter(_.score == 301).nonEmpty)
 
   }
 
@@ -771,8 +834,8 @@ object Excercise14 {
     /** Creates a new service working with existing repository */
     def apply[F[_]: Monad](repository: PlayerRepository[F], logging: Logging[F]): PlayerService[F] = new PlayerService[F] {
 
-      def deleteWorst(minimumScore: Int) = ???
-      def celebrate(bonus: Int) = ???
+      def deleteWorst(minimumScore: Int) = repository.all.map(_.filter(_.score < minimumScore) map { player => repository.delete(player.id) })
+      def celebrate(bonus: Int) = repository.all.map(_.map { player => repository.update(player.copy(score = player.score + bonus)) })
 
     }
 
@@ -788,32 +851,50 @@ class Excercise14FutureSpec extends AsyncFunSuite {
 
   import Excercise14._
 
+  class Fixture {
+    val repository = new PlayerRepository[Future] {
+      val playersReference: AtomicReference[List[Player]] = new AtomicReference(
+        List(Player("a", "Marta", "marta@bootcamp", 100), Player("b", "Maris", "maris@bootcamp", 200), Player("c", "Sergejs", "sergejs@bootcamp", 300))
+      )
+      def byId(id: String) = Future { None }
+      def all = Future { playersReference.get }
+      def update(player: Player) = Future {
+        playersReference.set(playersReference.get map { p =>
+          if (p.id == player.id) player else p
+        })
+      }
+      def delete(id: String) = Future {
+        playersReference.set(playersReference.get.filterNot(_.id == id))
+      }
+
+    }
+    val logging = new Logging[Future] {
+      override def info(message: String) = ???
+    }
+    val service = PlayerService(repository, logging)
+  }
+
   test("PlayerService.deleteWorst works correctly") {
 
-    // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService[Future](repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.deleteWorst(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.deleteWorst(200)
+      players <- fixture.repository.all
+    } yield assert(players.length == 2)
   }
 
   test("PlayerService.celebrate works correctly") {
 
     // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService[Future](repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.celebrate(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.celebrate(101)
+      players <- fixture.repository.all
+    } yield assert(players.filter(_.score == 301).nonEmpty)
 
   }
 
@@ -831,32 +912,50 @@ class Excercise14OptionSpec extends AnyFunSuite {
 
   import Excercise14._
 
+  class Fixture {
+    val repository = new PlayerRepository[Option] {
+      val playersReference: AtomicReference[List[Player]] = new AtomicReference(
+        List(Player("a", "Marta", "marta@bootcamp", 100), Player("b", "Maris", "maris@bootcamp", 200), Player("c", "Sergejs", "sergejs@bootcamp", 300))
+      )
+      def byId(id: String) = Option { None }
+      def all = Option { playersReference.get }
+      def update(player: Player) = Option {
+        playersReference.set(playersReference.get map { p =>
+          if (p.id == player.id) player else p
+        })
+      }
+      def delete(id: String) = Option {
+        playersReference.set(playersReference.get.filterNot(_.id == id))
+      }
+
+    }
+    val logging = new Logging[Option] {
+      override def info(message: String) = ???
+    }
+    val service = PlayerService(repository, logging)
+  }
+
   test("PlayerService.deleteWorst works correctly") {
 
-    // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService[Option](repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.deleteWorst(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.deleteWorst(200)
+      players <- fixture.repository.all
+    } yield assert(players.length == 2)
   }
 
   test("PlayerService.celebrate works correctly") {
 
     // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService[Option](repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.celebrate(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.celebrate(101)
+      players <- fixture.repository.all
+    } yield assert(players.filter(_.score == 301).nonEmpty)
 
   }
 
@@ -879,7 +978,6 @@ class Excercise14OptionSpec extends AnyFunSuite {
 //
 // We will not do property testing this time, but you can read more about it here:
 // https://www.scalatest.org/user_guide/property_based_testing
-
 
 // What is the big problem with the code we wrote above? We use `var` and
 // `AtomicReference` in our stubs a lot. It is a mutable state. Scala developers
@@ -911,9 +1009,7 @@ class Excercise14StateSpec extends AnyFunSuite {
   import Excercise14._
   type F[T] = State[List[Player], T]
 
-  test("PlayerService.deleteWorst works correctly") {
-
-    // construct fixture
+  class Fixture {
     val repository = new PlayerRepository[F] {
       def byId(id: String) = State.pure(None)
       def all = State.get
@@ -926,28 +1022,33 @@ class Excercise14StateSpec extends AnyFunSuite {
         players filterNot (_.id == id)
       }
     }
-    val logging = ???
-    val service = PlayerService[F](repository, logging)
-
-    // perform the test
-    service.deleteWorst(???) map { _ =>
-      // validate the results
-      assert(???)
+    val logging = new Logging[F] {
+      override def info(message: String): F[Unit] = ???
     }
+    val service = PlayerService[F](repository, logging)
+  }
+
+  test("PlayerService.deleteWorst works correctly") {
+
+    // construct fixture
+    val fixture = new Fixture
+
+    for {
+      _ <- fixture.service.deleteWorst(200)
+      players <- fixture.repository.all
+    } yield assert(players.length == 2)
   }
 
   test("PlayerService.celebrate works correctly") {
 
     // construct fixture
-    val repository = ???
-    val logging = ???
-    val service = PlayerService[F](repository, logging)
+    val fixture = new Fixture
 
     // perform the test
-    service.celebrate(???) map { _ =>
-      // validate the results
-      assert(???)
-    }
+    for {
+      _ <- fixture.service.celebrate(101)
+      players <- fixture.repository.all
+    } yield assert(players.filter(_.score == 301).nonEmpty)
 
   }
 

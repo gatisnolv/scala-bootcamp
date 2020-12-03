@@ -49,23 +49,13 @@ object CancelableResultsAndLegacy extends IOApp {
       def cancel(): Unit = cancelled.set(true)
     }
 
-    for {
-      _ <- putStrLn("Launching cancelable")
-      io = IO.cancelable[Long] { cb =>
-        val legacy = new UglyLegacyCode
-        legacy.compute(2L, Long.MaxValue)(res => cb(Right(res)), e => cb(Left(e)))
-        IO.delay(legacy.cancel())
-      }
-      fiber <- io.start
-      _ <- putStrLn(s"Started $fiber")
-      res <- IO.race(IO.sleep(10.seconds), fiber.join)
-      _ <-
-        res.fold(
-          _ => putStrLn(s"cancelling $fiber...") *> fiber.cancel *> putStrLn("IO cancelled"),
-          i => putStrLn(s"IO completed with: $i")
-        )
-    } yield ()
+    IO.cancelable[Long] { cb =>
+      val uglyLegacyCode = new UglyLegacyCode()
+      uglyLegacyCode.compute(1L, Long.MaxValue)(i => cb(Right(i)), err => cb(Left(err)))
+      IO.delay(uglyLegacyCode.cancel())
+    }
   }
+
   override def run(args: List[String]): IO[ExitCode] = for {
     _ <- cancelableLegacyIntegrationProgram
   } yield ExitCode.Success

@@ -15,27 +15,25 @@ object CustomMappings extends IOApp {
       val xy = raw.split(",").map(_.toInt)
       Coordinate(xy.head, xy.last)
     }
-    def toVarchar(c: Coordinate): String =
-      s"${c.x},${c.y}"
+    def toVarchar(c: Coordinate): String = s"${c.x},${c.y}"
   }
 
   // define `Get`, `Put`, `Meta`, talk about `Read` and `Write`
-//  implicit val xyGet: Get[Coordinate] = Get[String].tmap(Coordinate.fromVarchar)
-//  implicit val xyPut: Put[Coordinate] = Put[String].tcontramap(Coordinate.toVarchar)
-//  implicit val xyMeta: Meta[Coordinate] = Meta[String].timap(Coordinate.fromVarchar)(Coordinate.toVarchar)
+  // implicit val xyGet: Get[Coordinate] = Get[String].tmap(Coordinate.fromVarchar)
+  // implicit val xyPut: Put[Coordinate] = Put[String].tcontramap(Coordinate.toVarchar)
+  implicit val xyMeta: Meta[Coordinate] = Meta[String].timap(Coordinate.fromVarchar)(Coordinate.toVarchar)
 
-  override def run(args: List[String]): IO[ExitCode] =
-    DbTransactor
-      .make[IO]
-      .use { xa =>
-        setup().transact(xa) *>
-          sql"select * from points"
-            .query[Point]
-            .nel
-            .transact(xa)
-            .map(println)
-      }
-      .as(ExitCode.Success)
+  override def run(args: List[String]): IO[ExitCode] = DbTransactor
+    .make[IO]
+    .use { xa =>
+      setup().transact(xa) *>
+        sql"select * from points"
+          .query[Point]
+          .nel
+          .transact(xa)
+          .map(println)
+    }
+    .as(ExitCode.Success)
 
   private def setup(): ConnectionIO[Unit] = {
     val create = sql"create table points(name VARCHAR PRIMARY KEY, x INT, y INT)".update.run
@@ -44,17 +42,10 @@ object CustomMappings extends IOApp {
 //    val insert = "insert into points(name, xy) values (?, ?)"
 
     // batch insert
-    def insertPoints(rawValues: List[(String, Int, Int)]): ConnectionIO[Int] =
-      Update[(String, Int, Int)](insert).updateMany(rawValues)
+    def insertPoints(rawValues: List[(String, Int, Int)]): ConnectionIO[Int] = Update[(String, Int, Int)](insert).updateMany(rawValues)
 //      Update[(String, String)](insert).updateMany(rawValues.map { case (n, x, y) => (n, s"$x,$y") })
 
-    val inserts = insertPoints(
-      List(
-        ("A", 0, 0),
-        ("B", 5, 5),
-        ("C", 10, 10),
-      ),
-    )
+    val inserts = insertPoints(List(("A", 0, 0), ("B", 5, 5), ("C", 10, 10)))
 
     (create, inserts).mapN(_ + _).as(())
   }

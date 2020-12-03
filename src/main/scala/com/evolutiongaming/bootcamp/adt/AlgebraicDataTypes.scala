@@ -1,5 +1,9 @@
 package com.evolutiongaming.bootcamp.adt
 
+import java.time.Instant
+import com.evolutiongaming.bootcamp.adt.AlgebraicDataTypes.Hand.HoldemHand
+import com.evolutiongaming.bootcamp.adt.AlgebraicDataTypes.Hand.OmahaHand
+
 object AlgebraicDataTypes {
 
   // ALGEBRAIC DATA TYPES
@@ -67,14 +71,19 @@ object AlgebraicDataTypes {
   // Exercise. Create a smart constructor for `GameLevel` that only permits levels from 1 to 80.
   final case class GameLevel private (value: Int) extends AnyVal
   object GameLevel {
-    def create(value: Int): Option[GameLevel] = ???
+    def create(value: Int): Option[GameLevel] = if (value >= 1 && value <= 80) Some(GameLevel(value)) else None
   }
 
   // To disable creating case classes in any other way besides smart constructor, the following pattern
   // can be used. However, it is rather syntax-heavy and cannot be combined with value classes.
   sealed abstract case class Time private (hour: Int, minute: Int)
   object Time {
-    def create(hour: Int, minute: Int): Either[String, Time] = Right(new Time(hour, minute) {})
+    def create(hour: Int, minute: Int): Either[String, Time] =
+      if (hour < 0 || hour > 23)
+        Left("Invalid hour value")
+      else if (minute < 0 || minute > 59)
+        Left("Invalid minute value")
+      else Right(new Time(hour, minute) {})
   }
 
   // Exercise. Implement the smart constructor for `Time` that only permits values from 00:00 to 23:59 and
@@ -128,30 +137,44 @@ object AlgebraicDataTypes {
   }
 
   // Exercise. Implement `PaymentService.processPayment` using pattern matching and ADTs.
-  class PaymentService(
-    bankAccountService: BankAccountService,
-    creditCardService: CreditCardService,
-    cashService: CashService,
-  ) {
-    def processPayment(amount: BigDecimal, method: PaymentMethod): PaymentStatus = ???
+  class PaymentService(bankAccountService: BankAccountService, creditCardService: CreditCardService, cashService: CashService) {
+    def processPayment(amount: BigDecimal, method: PaymentMethod): PaymentStatus = method match {
+      case BankAccount(accountNumber) => bankAccountService.processPayment(amount, accountNumber)
+      case creditCard: CreditCard     => creditCardService.processPayment(amount, creditCard)
+      case Cash                       => cashService.processPayment(amount)
+    }
   }
 
   // Let's compare that to `NaivePaymentService.processPayment` implementation, which does not use ADTs, but
   // provides roughly the same features as `PaymentService`.
   // Question. What are disadvantages of `NaivePaymentService`? Are there any advantages?
   trait NaivePaymentService { // Obviously a bad example!
-    def processPayment(
-      amount: BigDecimal,
-      bankAccountNumber: Option[String],
-      validCreditCardNumber: Option[String],
-      isCash: Boolean,
-    ): String = ???
+    def processPayment(amount: BigDecimal, bankAccountNumber: Option[String], validCreditCardNumber: Option[String], isCash: Boolean): String = ???
   }
 
   // Exercise. Define an Algebraic Data Type `Car`, which has a manufacturer, a model, a production year,
   // and a license plate number (can contain from 3 to 8 upper case letters and numbers). Use value classes
   // and smart constructors as appropriate.
-  type Car = Nothing
+
+  // type Car = Nothing
+
+  final case class Manufacturer(value: String) extends AnyVal
+  final case class Model(value: String) extends AnyVal
+  final case class ProductionYear(value: Int) extends AnyVal
+  final case class LicensePlateNumber(value: String) extends AnyVal
+
+  final case class Car(manufacturer: Manufacturer, model: Model, year: ProductionYear, licensePlateNumber: LicensePlateNumber)
+  object Car {
+    def create(manufacturer: String, model: String, year: Int, plateNumber: String): Option[Car] =
+      if (year >= 1800 && year <= 2020 && plateNumber.length >= 3 && plateNumber.length <= 8 && plateNumber.matches("^[A-Z]*[0-9]*$"))
+        Some(Car(Manufacturer(manufacturer), Model(model), ProductionYear(year), LicensePlateNumber(plateNumber)))
+      else None
+  }
+
+  // def main(args: Array[String]): Unit = {
+  // println(Car.create("Ford", "Focus", 1991, "ABBA0001"))
+  // println(Car.create("Chevrolet", "Corvette", 2020, "XZ123"))
+  // }
 
   // Homework. Define all algebraic data types, which would be needed to implement “Hold’em Hand Strength”
   // task you completed to join the bootcamp. Use your best judgement about particular data types to include
@@ -168,6 +191,178 @@ object AlgebraicDataTypes {
   //
   // Make sure the defined model protects against invalid data. Use value classes and smart constructors as
   // appropriate. Place the solution under `adt` package in your homework repository.
+
+  // TODO
+  // 5. Board
+  // 6. Poker Combination (High Card, Pair, etc.)
+  // 7. Test Case (Board & Hands to rank)
+  // 8. Test Result (Hands ranked in a particular order for a particular Board, accounting for splits)
+
+  //Consider changing Options into Eithers to better inform of parsing errors
+
+  //Suit
+  sealed trait Suit
+  object Suit {
+    final case object Spade extends Suit
+    final case object Club extends Suit
+    final case object Heart extends Suit
+    final case object Diamond extends Suit
+    def of(value: String): Option[Suit] = {
+      value match {
+        case "s" => Some(Spade)
+        case "c" => Some(Club)
+        case "h" => Some(Heart)
+        case "d" => Some(Diamond)
+        case _   => None
+      }
+    }
+  }
+
+  //Rank
+  sealed trait Rank extends Comparable[Rank] {
+    val value: Int
+    override def compareTo(other: Rank): Int = value - other.value
+  }
+  object Rank {
+    final case class Two(value: Int = 0) extends Rank
+    final case class Three(value: Int = 1) extends Rank
+    final case class Four(value: Int = 2) extends Rank
+    final case class Five(value: Int = 3) extends Rank
+    final case class Six(value: Int = 4) extends Rank
+    final case class Seven(value: Int = 5) extends Rank
+    final case class Eight(value: Int = 6) extends Rank
+    final case class Nine(value: Int = 7) extends Rank
+    final case class Ten(value: Int = 8) extends Rank
+    final case class Jack(value: Int = 9) extends Rank
+    final case class Queen(value: Int = 10) extends Rank
+    final case class King(value: Int = 11) extends Rank
+    final case class Ace(value: Int = 12) extends Rank
+    def of(value: String): Option[Rank] = {
+      value match {
+        case "2" => Some(Two())
+        case "3" => Some(Three())
+        case "4" => Some(Four())
+        case "5" => Some(Five())
+        case "6" => Some(Six())
+        case "7" => Some(Seven())
+        case "8" => Some(Eight())
+        case "9" => Some(Nine())
+        case "T" => Some(Ten())
+        case "J" => Some(Jack())
+        case "Q" => Some(Queen())
+        case "K" => Some(King())
+        case "A" => Some(Ace())
+        case _   => None
+      }
+    }
+  }
+
+  //Card
+  final case class Card(suit: Suit, rank: Rank) extends Comparable[Card] {
+    override def compareTo(other: Card): Int = rank.compareTo(other.rank)
+  }
+  object Card {
+    def of(suit: String, rank: String): Option[Card] = (Suit.of(suit), Rank.of(rank)) match {
+      case (Some(suit: Suit), Some(rank: Rank)) => Some(Card(suit, rank))
+      case _                                    => None
+    }
+    def getCardsFromString(cards: String): Option[List[Card]] =
+      //convert string into card list
+      ???
+  }
+
+  //Hand
+  sealed trait Hand {
+    val cards: List[Card]
+  }
+  object Hand {
+    final case class HoldemHand(cards: List[Card]) extends Hand
+    final case class OmahaHand(cards: List[Card]) extends Hand
+    def of(cards: String): Option[Hand] = cards.length match {
+      case 4 | 8 =>
+        Card.getCardsFromString(cards) match {
+          case Some(cards) =>
+            cards.length match {
+              case 4 => Some(HoldemHand(cards))
+              case _ => Some(OmahaHand(cards))
+            }
+          case _ => None
+        }
+      case _ => None
+    }
+  }
+
+  // Board
+  final case class Board(boardCards: List[Card])
+  object Board {
+    def of(boardCards: String): Option[Board] = {
+      if (boardCards.length == 10) {
+        Card.getCardsFromString(boardCards) match {
+          case Some(cards) => Some(Board(cards))
+          case None        => None
+        }
+      } else None
+    }
+  }
+
+  // Poker Combination
+  sealed trait PokerCombination extends Comparable[PokerCombination] {
+    val value: Int
+    override def compareTo(other: PokerCombination): Int = {
+      val handStrengthTypeComparison = value - other.value
+      if (handStrengthTypeComparison == 0) compareToEqualStrengthType(other) else handStrengthTypeComparison
+    }
+    def compareToEqualStrengthType(other: PokerCombination): Int
+  }
+  object PokerCombination {
+    final case class HighCard(value: Int = 0, kickers: List[Rank]) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class Pair(value: Int = 1, pairRank: Rank, kickers: List[Rank]) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class TwoPairs(value: Int = 2, pairsRanks: List[Rank], kicker: Rank) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class ThreeOfAKind(value: Int = 3, three: Rank, kickers: List[Rank]) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class Straight(value: Int = 4, highestRank: Rank) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class Flush(value: Int = 5, ranks: List[Rank]) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class FullHouse(value: Int = 6, three: Rank, pair: Rank) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class FourOfAKind(value: Int = 7, four: Rank, kicker: Rank) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    final case class StraightFlush(value: Int = 8, highestRank: Rank) extends PokerCombination {
+      override def compareToEqualStrengthType(other: PokerCombination): Int = ???
+    }
+    def of(hand: Hand, board: Board): PokerCombination =
+      ///determine PokerCombination
+      hand match {
+        case HoldemHand(cards) => ???
+        case OmahaHand(cards)  => ???
+      }
+  }
+
+  // Test Case
+  final case class TestCase(boardCards: Board, hands: List[Hand])
+  object TestCase {
+    //parse a deal (one line of input as for the bootcamp task)
+    def of(deal: String): Option[TestCase] = ???
+  }
+
+  // Test Result
+  final case class TestResult(evaluatedHands: List[(Hand, PokerCombination)])
+  object TestResult {
+    //obtain list of hands ordered by ranks, accounting for draws in strength
+    def of(board: Board, hands: List[Hand]): List[Set[Hand]] = ???
+  }
 
   // Attributions and useful links:
   // https://nrinaudo.github.io/scala-best-practices/definitions/adt.html

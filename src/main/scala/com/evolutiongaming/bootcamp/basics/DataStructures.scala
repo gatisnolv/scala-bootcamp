@@ -49,7 +49,7 @@ object DataStructures {
 
   val joinLists = immutableList2 ::: List(8, 9) // 1 :: 2 :: 3 :: 8 :: 9 :: Nil
 
-  val headOfList1 = Try(emptyList1.head)// what will happen here?!
+  val headOfList1 = Try(emptyList1.head) // what will happen here?!
   val headOfList2 = emptyList1.headOption // None
   val headOfList3 = immutableList2.headOption // Some(1)
 
@@ -80,26 +80,22 @@ object DataStructures {
 
   // Exercise. Write a function that checks if all values in a `List` are equal.
   // Think about what you think your function should return if `list` is empty, and why.
-  def allEqual[T](list: List[T]): Boolean = {
-    false // TODO: implement
+  def allEqual[T](list: List[T]): Boolean = list match {
+    case Nil          => true
+    case x :: Nil     => true
+    case x :: y :: xs => if (x != y) false else allEqual(y :: xs)
   }
+
+  def allEqual2[T](list: List[T]): Boolean = list.toSet.size <= 1
 
   // Maps
   //
   // Maps consist of pairs of keys and values and usually offer fast lookup by key.
   // The default Scala `Map` is unordered and immutable.
 
-  val vegetableWeights = Map(
-    ("pumpkins", 10),
-    ("cucumbers", 20),
-    ("olives", 2),
-  )
+  val vegetableWeights = Map(("pumpkins", 10), ("cucumbers", 20), ("olives", 2))
 
-  val vegetablePrices = Map(
-    "tomatoes" -> 4,
-    "peppers" -> 5,
-    "olives" -> 17,
-  )
+  val vegetablePrices = Map("tomatoes" -> 4, "peppers" -> 5, "olives" -> 17)
 
   val moreVegetablePrices = vegetablePrices + ("pumpkins" -> 3)
   val lessVegetableWeights = vegetableWeights - "pumpkins"
@@ -108,12 +104,7 @@ object DataStructures {
 
   // Question. Why should `questionableMap` be considered questionable?
 
-  val vegetableAmounts = Map(
-    "tomatoes" -> 17,
-    "peppers" -> 234,
-    "olives" -> 32,
-    "cucumbers" -> 323,
-  )
+  val vegetableAmounts = Map("tomatoes" -> 17, "peppers" -> 234, "olives" -> 32, "cucumbers" -> 323)
 
   val tomatoAmount: Int = vegetableAmounts("tomatoes")
   val tomatoAmountOpt: Option[Int] = vegetableAmounts.get("tomatoes")
@@ -123,7 +114,16 @@ object DataStructures {
   // `vegetableAmounts` and prices per unit from `vegetablePrices`. Assume the price is 10 if not available
   // in `vegetablePrices`.
   val totalVegetableCost: Int = {
-    17 // implement here
+    vegetableAmounts.foldLeft(0)((acc, x) => {
+      val (veg, am) = x
+      vegetablePrices.getOrElse(veg, 10) * am + acc
+    })
+    // 17 // implement here
+  }
+
+  val totalVegetableCost2: Int = {
+    vegetableAmounts.map { case (veg, am) => vegetablePrices.getOrElse(veg, 10) * am }.sum
+    // 17 // implement here
   }
 
   // Exercise. Given the vegetable weights (per 1 unit of vegetable) in `vegetableWeights` and vegetable
@@ -131,13 +131,16 @@ object DataStructures {
   //
   // For example, the total weight of "olives" is 2 * 32 == 64.
   val totalVegetableWeights: Map[String, Int] = { // implement here
-    Map()
+    for {
+      (veg, am) <- vegetableAmounts
+      if (vegetableWeights.contains(veg))
+    } yield (veg, am * vegetableWeights.getOrElse(veg, 0))
   }
 
   // Ranges and Sequences
-  val inclusiveRange: Seq[Int] = 2 to 4    // 2, 3, 4, or <=
+  val inclusiveRange: Seq[Int] = 2 to 4 // 2, 3, 4, or <=
   val exclusiveRange: Seq[Int] = 2 until 4 // 2, 3, or <
-  val withStep: Seq[Int] = 2 to 40 by 7    // 2, 9, 16, 23, 30, 37
+  val withStep: Seq[Int] = 2 to 40 by 7 // 2, 9, 16, 23, 30, 37
 
   // Seq, IndexedSeq and LinearSeq traits are implemented by many collections and contain various useful
   // methods. See https://docs.scala-lang.org/overviews/collections/seqs.html in case you are interested
@@ -193,8 +196,9 @@ object DataStructures {
   //     that don't include `elem`, and add `elem` to them.
   def allSubsetsOfSizeN[A](set: Set[A], n: Int): Set[Set[A]] = {
     // replace with correct implementation
-    println(n)
-    Set(set)
+    // println(n)
+    // Set(set)
+    set.subsets(n).toSet // built-in combinations
   }
 
   // Homework
@@ -214,5 +218,26 @@ object DataStructures {
   //
   // Input `Map("a" -> 1, "b" -> 2, "c" -> 4, "d" -> 1, "e" -> 0, "f" -> 2, "g" -> 2)` should result in
   // output `List(Set("e") -> 0, Set("a", "d") -> 1, Set("b", "f", "g") -> 2, Set("c") -> 4)`.
-  def sortConsideringEqualValues[T](map: Map[T, Int]): List[(Set[T], Int)] = ???
+  def sortConsideringEqualValuesImperative[T](map: Map[T, Int]): List[(Set[T], Int)] = {
+    var reverseMap: Map[Int, Set[T]] = Map.empty
+    map.foreach(x => {
+      val (value, int) = x
+      if (!reverseMap.contains(int)) {
+        reverseMap = reverseMap + (int -> Set.empty)
+      }
+      reverseMap = reverseMap + (int -> (reverseMap(int) + value))
+    })
+    reverseMap.keySet.toList.sorted
+      .map(int => {
+        val set = reverseMap(int)
+        (set, int)
+      })
+      .toList
+  }
+
+  def sortConsideringEqualValues[T](map: Map[T, Int]): List[(Set[T], Int)] = map.groupBy({ case (_, int) => int }).map({ case (int, map) => (map.keySet, int) }).toList.sortBy({ case (_, int) => int })
+
+  def sortConsideringEqualValuesUsingForComprehension[T](map: Map[T, Int]): List[(Set[T], Int)] = (for {
+    (int, map) <- map.groupBy({ case (_, int) => int })
+  } yield (map.keySet, int)).toList.sortBy({ case (_, int) => int })
 }

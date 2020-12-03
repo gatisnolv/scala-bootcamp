@@ -1,6 +1,7 @@
 package com.evolutiongaming.bootcamp.basics
 
 import scala.io.Source
+import com.evolutiongaming.bootcamp.basics.ControlStructuresHomework.Command._
 
 object ControlStructuresHomework {
   // Homework
@@ -42,34 +43,72 @@ object ControlStructuresHomework {
   // Adjust `Result` and `ChangeMe` as you wish - you can turn Result into a `case class` and remove the `ChangeMe` if
   // you think it is the best model for your solution, or just have other `case class`-es implement `Result`
   sealed trait Result
-  final case class ChangeMe(value: String) extends Result
+  final case class DivisionResult(dividend: Double, divisor: Double, value: Double) extends Result
+  final case class SumResult(numbers: List[Double], value: Double) extends Result
+  final case class AverageResult(numbers: List[Double], value: Double) extends Result
+  final case class MinResult(numbers: List[Double], value: Double) extends Result
+  final case class MaxResult(numbers: List[Double], value: Double) extends Result
 
   def parseCommand(x: String): Either[ErrorMessage, Command] = {
-    ??? // implement this method
-    // Implementation hints:
-    // You can use String#split, convert to List using .toList, then pattern match on:
-    //   case x :: xs => ???
+    val splitResult: List[String] = x.stripLeading.stripTrailing.stripLineEnd.split("\\s+").toList
+    val tokens = if (splitResult.length == 1 && splitResult(0) == "") Nil else splitResult // used to handle exclusively whitespace inputs
 
-    // Consider how to handle extra whitespace gracefully (without errors).
+    tokens match {
+      case x :: xs =>
+        val parameters: List[Option[Double]] = xs.map(x => x.toDoubleOption)
+        if (parameters.contains(None)) {
+          Left(ErrorMessage(s"Non-numeric inputs found. All commands operate on numeric inputs."))
+        } else {
+          val inputs = parameters.flatten
+          x match {
+            case "divide"  => if (xs.length == 2) Right(Divide(inputs(0), inputs(1))) else Left(ErrorMessage("Wrong number of parameters for division."))
+            case "sum"     => Right(Sum(inputs))
+            case "average" => Right(Average(inputs))
+            case "min"     => Right(Min(inputs))
+            case "max"     => Right(Max(inputs))
+            case unknown => {
+              Left(ErrorMessage(s"Unsupported command: '$unknown'"))
+            }
+          }
+        }
+      case Nil => Left(ErrorMessage("Empty input"))
+    }
   }
 
   // should return an error (using `Left` channel) in case of division by zero and other
   // invalid operations
   def calculate(x: Command): Either[ErrorMessage, Result] = {
-    ??? // implement this method
+    x match {
+      case Divide(dividend, divisor) => if (divisor != 0) Right(DivisionResult(dividend, divisor, dividend / divisor)) else Left(ErrorMessage("division by 0"))
+      case Sum(numbers)              => if (numbers != Nil) Right(SumResult(numbers, numbers.sum)) else Left(ErrorMessage("no numbers provided"))
+      case Average(numbers)          => if (numbers != Nil) Right(AverageResult(numbers, numbers.sum / numbers.size)) else Left(ErrorMessage("no numbers provided"))
+      case Min(numbers)              => if (numbers != Nil) Right(MinResult(numbers, numbers.min)) else Left(ErrorMessage("no numbers provided"))
+      case Max(numbers)              => if (numbers != Nil) Right(MaxResult(numbers, numbers.max)) else Left(ErrorMessage("no numbers provided"))
+    }
   }
 
   def renderResult(x: Result): String = {
-    ??? // implement this method
+    x match {
+      case DivisionResult(dividend, divisor, value) => s"$dividend divided by $divisor is $value"
+      case SumResult(numbers, value)                => s"the sum of ${numbers.toList.mkString(" ")} is $value"
+      case AverageResult(numbers, value)            => s"the average of ${numbers.toList.mkString(" ")} is $value"
+      case MinResult(numbers, value)                => s"the minimum of ${numbers.toList.mkString(" ")} is $value"
+      case MaxResult(numbers, value)                => s"the maximum of ${numbers.toList.mkString(" ")} is $value"
+    }
+  }
+
+  def renderError(e: ErrorMessage): String = {
+    s"Error: ${e.value}"
   }
 
   def process(x: String): String = {
-    import cats.implicits._
-    // the import above will enable useful operations on Either-s such as `leftMap`
-    // (map over the Left channel) and `merge` (convert `Either[A, A]` into `A`),
-    // but you can also avoid using them using pattern matching.
-
-    ??? // implement using a for-comprehension
+    (for {
+      command <- parseCommand(x)
+      result <- calculate(command)
+    } yield result) match {
+      case Right(result)      => renderResult(result)
+      case Left(errorMessage) => renderError(errorMessage)
+    }
   }
 
   // This `main` method reads lines from stdin, passes each to `process` and outputs the return value to stdout

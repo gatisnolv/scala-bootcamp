@@ -1,13 +1,17 @@
 package com.evolutiongaming.bootcamp.json
 
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatter._
 import java.time.{LocalDate, ZonedDateTime}
 
 import cats.instances.either._
 import cats.instances.list._
+import cats.syntax.either._
 import cats.syntax.traverse._
 import io.circe
+import io.circe._
 import io.circe.parser._
+import io.circe.generic.extras._
 import io.circe.generic.JsonCodec
 import org.scalatest.EitherValues
 import org.scalatest.matchers.must.Matchers
@@ -57,9 +61,14 @@ class HomeworkSpec extends AnyWordSpec with Matchers with EitherValues {
 }
 
 object HomeworkSpec {
-  @JsonCodec final case class TeamTotals(assists: String, fullTimeoutRemaining: String, plusMinus: String)
+  implicit val config: Configuration = Configuration.default
+  @ConfiguredJsonCodec final case class TeamTotals(assists: String, @JsonKey("full_timeout_remaining") fullTimeoutRemaining: String, plusMinus: String)
   @JsonCodec final case class TeamBoxScore(totals: TeamTotals)
   @JsonCodec final case class GameStats(hTeam: TeamBoxScore, vTeam: TeamBoxScore)
+  implicit val localDateEncodedr: Encoder[LocalDate] = Encoder.encodeString.contramap[LocalDate](_.format(BASIC_ISO_DATE).toString)
+  implicit val localDateDecoder: Decoder[LocalDate] = Decoder.decodeString.emap { str =>
+    Either.catchNonFatal(LocalDate.parse(str, BASIC_ISO_DATE)).leftMap(err => "LocalDate: " + err.getMessage)
+  }
   @JsonCodec final case class PrevMatchup(gameDate: LocalDate, gameId: String)
   @JsonCodec final case class BoxScore(
     basicGameData: Game,

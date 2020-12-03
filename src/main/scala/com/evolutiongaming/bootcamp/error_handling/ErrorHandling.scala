@@ -2,6 +2,13 @@ package com.evolutiongaming.bootcamp.error_handling
 
 import scala.concurrent.Future
 import scala.util.control.NonFatal
+import scala.util.Try
+import com.evolutiongaming.bootcamp.error_handling.ErrorHandling.TransferError.NegativeAmount
+import com.evolutiongaming.bootcamp.error_handling.ErrorHandling.TransferError.ZeroAmount
+import com.evolutiongaming.bootcamp.error_handling.ErrorHandling.TransferError.AmountIsTooLarge
+import com.evolutiongaming.bootcamp.error_handling.ErrorHandling.TransferError.TooManyDecimals
+import sourcecode.Macros.Chunk.Val
+import java.time._
 
 object ErrorHandling extends App {
 
@@ -55,7 +62,7 @@ object ErrorHandling extends App {
   // can go wrong or there is no interest in a particular reason for a failure.
 
   // Exercise. Implement `parseIntOption` method.
-  def parseIntOption(string: String): Option[Int] = ???
+  def parseIntOption(string: String): Option[Int] = Try(Integer.parseInt(string)).toOption
 
   // The downside of Option is that it does not encode any information about what exactly went wrong. It only
   // states the mere fact that it did.
@@ -69,7 +76,9 @@ object ErrorHandling extends App {
 
   // Exercise. Implement `parseIntEither` method, returning the parsed integer as `Right` upon success and
   // "{{string}} does not contain an integer" as `Left` upon failure.
-  def parseIntEither(string: String): Either[String, Int] = ???
+  def parseIntEither(string: String): Either[String, Int] = Try(string.toInt).toOption.toRight(s"${string} does not contain an integer")
+  // alternative:
+  def parseIntEither2(string: String): Either[String, Int] = Try(string.toInt).toEither.left.map(_ => s"$string does not contain an integer")
 
   // As an alternative to `String`, a proper ADT can be introduced to formalize all error cases. As discussed
   // in `AlgebraicDataTypes` section, this provides a number of benefits, including an exhaustiveness check
@@ -78,18 +87,36 @@ object ErrorHandling extends App {
   // Note that this is a superficial example. Always think how detailed you want your error cases to be.
   sealed trait TransferError
   object TransferError {
+
     /** Returned when amount to credit is negative. */
     final case object NegativeAmount extends TransferError
+
     /** Returned when amount to credit is zero. */
     final case object ZeroAmount extends TransferError
+
     /** Returned when amount to credit is equal or greater than 1 000 000. */
     final case object AmountIsTooLarge extends TransferError
+
     /** Returned when amount to credit is within the valid range, but has more than 2 decimal places. */
     final case object TooManyDecimals extends TransferError
   }
   // Exercise. Implement `credit` method, returning `Unit` as `Right` upon success and the appropriate
   // `TransferError` as `Left` upon failure.
-  def credit(amount: BigDecimal): Either[TransferError, Unit] = ???
+  def credit(amount: BigDecimal): Either[TransferError, Unit] =
+    if (amount < 0) Left(NegativeAmount)
+    else if (amount == 0) Left(ZeroAmount)
+    else if (amount > 1000000) Left(AmountIsTooLarge)
+    else if (amount.scale > 2) Left(TooManyDecimals)
+    else Right(())
+
+  // alternative:
+  def credit2(amount: BigDecimal): Either[TransferError, Unit] = (if (amount < 0) NegativeAmount
+                                                                  else if (amount == 0) ZeroAmount
+                                                                  else if (amount > 1000000) AmountIsTooLarge
+                                                                  else if (amount.scale > 2) TooManyDecimals) match {
+    case t: TransferError => Left(t)
+    case _                => Right(())
+  }
 
   // `Either[Throwable, A]` is similar to `Try[A]`. However, because `Try[A]` has its error channel hardcoded
   // to a specific type and `Either[L, R]` does not, `Try[A]` provides more specific methods to deal with
@@ -163,13 +190,21 @@ object ErrorHandling extends App {
     // Exercise. Implement `validateAge` method, so that it returns `AgeIsNotNumeric` if the age string is not
     // a number and `AgeIsOutOfBounds` if the age is not between 18 and 75. Otherwise the age should be
     // considered valid and returned inside `AllErrorsOr`.
-    private def validateAge(age: String): AllErrorsOr[Int] = ???
+    private def validateAge(age: String): AllErrorsOr[Int] = {
+      def validateAgeContents: AllErrorsOr[Int] = age.toIntOption match {
+        case Some(value) => value.validNec
+        case _           => AgeIsNotNumeric.invalidNec
+      }
+
+      def validateAgeBounds(age: Int): AllErrorsOr[Int] = if (age < 18 || age > 75) AgeIsOutOfBounds.invalidNec else age.validNec
+
+      validateAgeContents andThen validateAgeBounds
+    }
 
     // `validate` method takes raw username and age values (for example, as received via POST request),
     // validates them, transforms as needed and returns `AllErrorsOr[Student]` as a result. `mapN` method
     // allows to map other N Validated instances at the same time.
-    def validate(username: String, age: String): AllErrorsOr[Student] =
-      (validateUsername(username), validateAge(age)).mapN(Student)
+    def validate(username: String, age: String): AllErrorsOr[Student] = (validateUsername(username), validateAge(age)).mapN(Student)
   }
 
   // HANDLING ERRORS IN A FUNCTIONAL WAY
@@ -226,25 +261,111 @@ object ErrorHandling extends App {
   // 3. Implement `validate` method to construct `PaymentCard` instance from the supplied raw data.
   object Homework {
 
-    case class PaymentCard(/* Add parameters as needed */)
+    case class PaymentCard(name: String, number: String, expirationDate: YearMonth, securityCode: String)
+    object PaymentCard {
+      import PaymentCardValidator._
+      def of(name: String, number: String, expirationDate: String, securityCode: String): AllErrorsOr[PaymentCard] = validate(name, number, expirationDate, securityCode)
+    }
 
     sealed trait ValidationError
     object ValidationError {
-      ??? // Add errors as needed
+      final case object NameOnCardHasUnsupportedCharacters extends ValidationError {
+        override def toString = "The name on credit card contains unsupported characters"
+      }
+      final case object NameOnCardHasIncorrectLength extends ValidationError {
+        override def toString = "The name on card has to be between 2 and 26 characters long"
+      }
+      final case object CardNumberIsNotNumeric extends ValidationError {
+        override def toString = "Credit card number must contain only digits"
+      }
+      final case object CardNumberHasWrongLength extends ValidationError {
+        override def toString = "Credit card number length must be between 15 and 19 digits long"
+      }
+      final case object ExpirationDateHasInvalidFormat extends ValidationError {
+        override def toString = "Expiration dates must be valid dates in the form MM/YY"
+      }
+      final case object CardHasExpired extends ValidationError {
+        override def toString = "Credit cards must not be expired"
+      }
+      final case object SecurityCodeIsNotNumeric extends ValidationError {
+        override def toString = "The security code must be numeric"
+      }
+      final case object SecurityCodeHasWrongLength extends ValidationError {
+        override def toString = "The security code must be 3 or 4 digits long"
+      }
     }
 
     object PaymentCardValidator {
 
+      import ValidationError._
+
       type AllErrorsOr[A] = ValidatedNec[ValidationError, A]
 
-      def validate(
-        name: String,
-        number: String,
-        expirationDate: String,
-        securityCode: String,
-      ): AllErrorsOr[PaymentCard] = ???
+      private def validateName(name: String): AllErrorsOr[String] = {
+        def validateNameContents: AllErrorsOr[String] =
+          if (name.matches("^[A-Z '`~.-]+$")) name.validNec
+          else NameOnCardHasUnsupportedCharacters.invalidNec
+
+        def validateNameLength: AllErrorsOr[String] =
+          if (name.length > 26 || name.length < 2) NameOnCardHasIncorrectLength.invalidNec
+          else name.validNec
+
+        validateNameContents *> validateNameLength
+      }
+
+      private def validateNumber(number: String): AllErrorsOr[String] = {
+        def validateNumberContents: AllErrorsOr[String] =
+          if (number.matches("^[0-9]+$")) number.validNec
+          else CardNumberIsNotNumeric.invalidNec
+
+        def validateNumberLength: AllErrorsOr[String] =
+          if (number.length > 19 || number.length < 15) CardNumberHasWrongLength.invalidNec
+          else number.validNec
+
+        validateNumberContents *> validateNumberLength
+      }
+
+      private def validateExpirationDate(expirationDate: String): AllErrorsOr[YearMonth] = {
+        def validateDateFormat: AllErrorsOr[YearMonth] = {
+          expirationDate.split("/") match {
+            case Array(month, year) =>
+              Try(YearMonth.of(2000 + year.toInt, month.toInt)).toOption match {
+                case Some(x) => x.validNec
+                case None    => ExpirationDateHasInvalidFormat.invalidNec
+              }
+            case _ => ExpirationDateHasInvalidFormat.invalidNec
+          }
+        }
+
+        def validateCardNotExpired(date: YearMonth) =
+          if (date.isAfter(YearMonth.now()))
+            date.validNec
+          else CardHasExpired.invalidNec
+
+        validateDateFormat andThen validateCardNotExpired
+      }
+
+      private def validateSecurityCode(code: String): AllErrorsOr[String] = {
+        def validateCodeContents: AllErrorsOr[String] =
+          if (code.matches("^[0-9]+$")) code.validNec
+          else SecurityCodeIsNotNumeric.invalidNec
+
+        def validateCodeLength: AllErrorsOr[String] =
+          if (code.length > 4 || code.length < 3) SecurityCodeHasWrongLength.invalidNec
+          else code.validNec
+
+        validateCodeContents *> validateCodeLength
+      }
+
+      def validate(name: String, number: String, expirationDate: String, securityCode: String): AllErrorsOr[PaymentCard] =
+        (validateName(name), validateNumber(number), validateExpirationDate(expirationDate), validateSecurityCode(securityCode)).mapN(PaymentCard(_, _, _, _))
     }
   }
+
+  println(Homework.PaymentCard.of("john", "1234567812345678", "13/10", "123"))
+  println(Homework.PaymentCard.of("JOHN '`~.- SURNAME", "1234567812345678", "12/20", "123"))
+  println(Homework.PaymentCard.of("JOHN '`~.- SURNAME(AAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "123456781234567812345678a", "13/20", "1a34"))
+  println(Homework.PaymentCard.of("JOHN '`~.- SURNAME(AAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "123456781234567812345678a", "12/19", "1a34"))
 
   // Attributions and useful links:
   // https://www.lihaoyi.com/post/StrategicScalaStylePrincipleofLeastPower.html#error-handling

@@ -6,34 +6,35 @@ object p1_Semigroup {
     * Semigroup is Set with an associative binary operation.
     * Quick re-cap on associativity: 1 + (2 + 3) == (1 + 2) + 3
     * Meet the Semigroup type class:
-    * */
+    */
   import cats.Semigroup
 
   /**
     * Ex 1.0 implement a semigroup with string concatenation as an associative binary operation
-    * */
+    */
   val stringSemigroup: Semigroup[String] = new Semigroup[String] {
-    override def combine(x: String, y: String): String =
-      ??? /* your code here */
+    override def combine(x: String, y: String): String = x + y
   }
 
   /**
     * Ex 1.1 implement a semigroup with `sum` as an operation.
     * Q: Can you pick another operation that forms a semigroup for ints?
-    * */
-  val intSemigroup: Semigroup[Int] = (a, b) => ??? /* your code here */
+    */
+  val intSemigroup: Semigroup[Int] = (a, b) => a + b
 
   /**
     * Ex 1.2
-    * */
-  def listSemigroup[A]: Semigroup[List[A]] =
-    (a, b) => ??? /* your code here */
+    */
+  def listSemigroup[A]: Semigroup[List[A]] = (a, b) => a.concat(b)
+  def listSemigroup2[A]: Semigroup[List[A]] = (a, b) => a ++ b
+  def listSemigroup3[A]: Semigroup[List[A]] = (a, b) => a ::: b
 
   // Cats has instances for a variety of types. They may be found in cats.instances package:
   import cats.instances.int._
   import cats.instances.option._
   import cats.syntax.semigroup._
 
+  // what is the operation in this case?
   val catsIntSemigroup: Semigroup[Int] = implicitly[Semigroup[Int]]
 
   val result = 1 combine 2 //  = 3
@@ -42,7 +43,6 @@ object p1_Semigroup {
 
   val optResult: Option[Int] = Option(3) |+| Option(7) // Some(10)
 
-
   /**
     * That's nice, but why can't we just use ordinary `+` defined for numerical types, for example?
     * For sure we can.
@@ -50,6 +50,5 @@ object p1_Semigroup {
     * Or while designing a library | class we may demand a presence of Semigroup to be able to combine values.
     * For example, if we want to combine messages of Response type from different services into a single fat Response
     * without event knowing what's inside.
-    *
-    * */
+    */
 }
